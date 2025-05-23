@@ -36,8 +36,8 @@ const SignUp = () => {
             newErrors.username = 'Username is required';
         } else if (formData.username.length < 3) {
             newErrors.username = 'Username must be at least 3 characters';
-        } else if (formData.username.length > 50) {
-            newErrors.username = 'Username must be less than 50 characters';
+        } else if (formData.username.length > 20) {
+            newErrors.username = 'Username must be less than 20 characters';
         }
 
         // Password validation

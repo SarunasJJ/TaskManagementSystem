@@ -17,7 +17,6 @@ body {
   min-height: 100vh;
 }
 
-/* Global styles */
 button {
   font-family: inherit;
 }
@@ -26,7 +25,6 @@ input {
   font-family: inherit;
 }
 
-/* Loading spinner */
 .loading {
   display: flex;
   justify-content: center;

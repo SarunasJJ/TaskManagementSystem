@@ -57,7 +57,7 @@ const Login = () => {
 
             if (result.success) {
                 alert('Login successful!');
-                navigate('/homepage'); // Redirect to dashboard or home page
+                navigate('/homepage');
             } else {
                 setErrors({ general: result.error });
             }
