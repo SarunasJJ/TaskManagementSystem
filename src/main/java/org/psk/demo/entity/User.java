@@ -18,6 +18,9 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Version
+    private Long version;
+
     @Column(unique = true, nullable = false)
     @NotBlank(message = "Username required")
     @Size(min = 3, max = 20, message = "Username must be between 3 and 20 characters")
