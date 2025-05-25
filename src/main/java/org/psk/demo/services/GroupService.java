@@ -24,6 +24,9 @@ public class GroupService {
     @Autowired
     private UserRepository userRepository;
 
+    /**
+     * Creates a new group with the specified user as creator and first member
+     */
     public GroupResponse createGroup(CreateGroupRequest request, Long creatorId) {
         try {
             // Check if group name already exists
@@ -59,6 +62,9 @@ public class GroupService {
         }
     }
 
+    /**
+     * Retrieves all groups where the user is either creator or member
+     */
     @Transactional(readOnly = true)
     public List<GroupResponse> getUserGroups(Long userId) {
         Optional<User> userOpt = userRepository.findById(userId);
@@ -74,6 +80,9 @@ public class GroupService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Retrieves a specific group by ID if user has access
+     */
     @Transactional(readOnly = true)
     public GroupResponse getGroupById(Long groupId, Long userId) {
         Optional<Group> groupOpt = groupRepository.findById(groupId);
@@ -97,6 +106,9 @@ public class GroupService {
         return convertToGroupResponse(group);
     }
 
+    /**
+     * Adds a new member to the group (only group creator can do this)
+     */
     public GroupResponse addMemberToGroup(Long groupId, String username, Long currentUserId) {
         try {
             // Find group
@@ -137,6 +149,9 @@ public class GroupService {
         }
     }
 
+    /**
+     * Removes a member from the group (only group creator can do this)
+     */
     public GroupResponse removeMemberFromGroup(Long groupId, Long userIdToRemove, Long currentUserId) {
         try {
             // Find group
@@ -177,11 +192,49 @@ public class GroupService {
         }
     }
 
+    /**
+     * Checks if a group name is available for use
+     */
     @Transactional(readOnly = true)
     public boolean isGroupNameAvailable(String name) {
         return !groupRepository.existsByName(name);
     }
 
+    /**
+     * Deletes a group permanently (only group creator can do this)
+     */
+    public GroupResponse deleteGroup(Long groupId, Long currentUserId) {
+        try {
+            // Find group
+            Optional<Group> groupOpt = groupRepository.findById(groupId);
+            if (groupOpt.isEmpty()) {
+                return new GroupResponse("Group not found!", false);
+            }
+
+            Group group = groupOpt.get();
+
+            // Check if current user is the creator
+            Optional<User> currentUserOpt = userRepository.findById(currentUserId);
+            if (currentUserOpt.isEmpty() || !group.isCreator(currentUserOpt.get())) {
+                return new GroupResponse("Only group creator can delete the group!", false);
+            }
+
+            // Store group name for response message
+            String groupName = group.getName();
+
+            // Delete the group (cascade will handle member relationships)
+            groupRepository.delete(group);
+
+            return new GroupResponse("Group '" + groupName + "' deleted successfully!", true);
+
+        } catch (Exception e) {
+            return new GroupResponse("Could not delete group! " + e.getMessage(), false);
+        }
+    }
+
+    /**
+     * Converts a Group entity to a GroupResponse DTO
+     */
     private GroupResponse convertToGroupResponse(Group group) {
         List<GroupResponse.UserDto> memberDtos = group.getMembers().stream()
                 .map(member -> new GroupResponse.UserDto(member.getId(), member.getUsername()))

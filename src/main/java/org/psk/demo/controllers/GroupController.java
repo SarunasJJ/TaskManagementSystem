@@ -166,4 +166,25 @@ public class GroupController {
         boolean isAvailable = groupService.isGroupNameAvailable(name);
         return ResponseEntity.ok(Map.of("available", isAvailable));
     }
+
+    @DeleteMapping("/{groupId}")
+    public ResponseEntity<?> deleteGroup(
+            @PathVariable Long groupId,
+            HttpSession session,
+            @RequestHeader(value = "User-Id", required = false) String userIdHeader) {
+
+        Long userId = getUserId(session, userIdHeader);
+        if (userId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ErrorResponse("User not authenticated", false));
+        }
+
+        GroupResponse response = groupService.deleteGroup(groupId, userId);
+
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
 }
