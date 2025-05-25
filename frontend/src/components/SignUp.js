@@ -1,7 +1,74 @@
 import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+    Container,
+    Paper,
+    TextField,
+    Button,
+    Typography,
+    Box,
+    Alert,
+    CircularProgress,
+    InputAdornment,
+    IconButton,
+    Fade,
+    LinearProgress
+} from '@mui/material';
+import {
+    PersonAdd as PersonAddIcon,
+    Person as PersonIcon,
+    Lock as LockIcon,
+    LockOpen as LockOpenIcon,
+    Visibility,
+    VisibilityOff,
+    Check as CheckIcon,
+    Close as CloseIcon
+} from '@mui/icons-material';
+import { styled } from '@mui/material/styles';
 import authService from '../services/authService';
-import './Auth.css';
-import {Link, useNavigate} from "react-router-dom";
+
+const SignUpContainer = styled(Box)(({ theme }) => ({
+    minHeight: '100vh',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    padding: theme.spacing(2),
+}));
+
+const SignUpPaper = styled(Paper)(({ theme }) => ({
+    padding: theme.spacing(4),
+    borderRadius: theme.spacing(2),
+    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+    width: '100%',
+    maxWidth: 450,
+    animation: 'slideUp 0.5s ease-out',
+    '@keyframes slideUp': {
+        from: {
+            opacity: 0,
+            transform: 'translateY(30px)',
+        },
+        to: {
+            opacity: 1,
+            transform: 'translateY(0)',
+        },
+    },
+}));
+
+const HeaderBox = styled(Box)(({ theme }) => ({
+    textAlign: 'center',
+    marginBottom: theme.spacing(3),
+}));
+
+const FormBox = styled(Box)(({ theme }) => ({
+    display: 'flex',
+    flexDirection: 'column',
+    gap: theme.spacing(2),
+}));
+
+const PasswordStrengthBox = styled(Box)(({ theme }) => ({
+    marginTop: theme.spacing(1),
+}));
 
 const SignUp = () => {
     const navigate = useNavigate();
@@ -12,6 +79,8 @@ const SignUp = () => {
     });
     const [errors, setErrors] = useState({});
     const [isLoading, setIsLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -26,7 +95,36 @@ const SignUp = () => {
                 [name]: ''
             }));
         }
+        if (errors.general) {
+            setErrors(prev => ({
+                ...prev,
+                general: ''
+            }));
+        }
     };
+
+    const getPasswordStrength = () => {
+        const password = formData.password;
+        if (!password) return { strength: 0, text: '', color: 'error' };
+
+        let strength = 0;
+        const checks = {
+            length: password.length >= 8,
+            lowercase: /[a-z]/.test(password),
+            uppercase: /[A-Z]/.test(password),
+            number: /\d/.test(password),
+            special: /[!@#$%^&*(),.?":{}|<>]/.test(password)
+        };
+
+        strength = Object.values(checks).filter(Boolean).length;
+
+        if (strength <= 2) return { strength: (strength / 5) * 100, text: 'Weak', color: 'error' };
+        if (strength <= 3) return { strength: (strength / 5) * 100, text: 'Fair', color: 'warning' };
+        if (strength <= 4) return { strength: (strength / 5) * 100, text: 'Good', color: 'info' };
+        return { strength: 100, text: 'Strong', color: 'success' };
+    };
+
+    const passwordStrength = getPasswordStrength();
 
     const validateForm = () => {
         const newErrors = {};
@@ -73,8 +171,12 @@ const SignUp = () => {
             const result = await authService.signUp(formData);
 
             if (result.success) {
-                alert('Account created successfully!');
-                navigate('/login');
+                navigate('/login', {
+                    state: {
+                        message: 'Account created successfully! Please sign in.',
+                        severity: 'success'
+                    }
+                });
             } else {
                 setErrors({ general: result.error });
             }
@@ -85,80 +187,196 @@ const SignUp = () => {
         }
     };
 
+    const handleClickShowPassword = () => {
+        setShowPassword(!showPassword);
+    };
+
+    const handleClickShowConfirmPassword = () => {
+        setShowConfirmPassword(!showConfirmPassword);
+    };
+
+    const getConfirmPasswordIcon = () => {
+        if (!formData.confirmPassword) return null;
+        if (formData.password === formData.confirmPassword) {
+            return <CheckIcon color="success" />;
+        }
+        return <CloseIcon color="error" />;
+    };
+
     return (
-        <div className="auth-container">
-            <div className="auth-card">
-                <h2>Create Account</h2>
+        <SignUpContainer>
+            <SignUpPaper elevation={10}>
+                <HeaderBox>
+                    <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+                        <Box
+                            sx={{
+                                width: 60,
+                                height: 60,
+                                borderRadius: '50%',
+                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                            }}
+                        >
+                            <PersonAddIcon sx={{ color: 'white', fontSize: 30 }} />
+                        </Box>
+                    </Box>
+                    <Typography variant="h4" component="h1" gutterBottom fontWeight={600}>
+                        Create Account
+                    </Typography>
+                    <Typography variant="body1" color="text.secondary">
+                        Join us and start collaborating
+                    </Typography>
+                </HeaderBox>
 
                 {errors.general && (
-                    <div className="error-message general-error">
-                        {errors.general}
-                    </div>
+                    <Fade in>
+                        <Alert severity="error" sx={{ mb: 3 }}>
+                            {errors.general}
+                        </Alert>
+                    </Fade>
                 )}
 
-                <form onSubmit={handleSubmit} className="auth-form">
-                    <div className="form-group">
-                        <label htmlFor="username">Username</label>
-                        <input
-                            type="text"
-                            id="username"
+                <Box component="form" onSubmit={handleSubmit}>
+                    <FormBox>
+                        <TextField
+                            fullWidth
+                            label="Username"
                             name="username"
                             value={formData.username}
                             onChange={handleChange}
-                            className={errors.username ? 'error' : ''}
+                            error={!!errors.username}
+                            helperText={errors.username || `${formData.username.length}/20 characters`}
                             placeholder="Enter your username"
+                            inputProps={{ maxLength: 20 }}
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <PersonIcon color={errors.username ? 'error' : 'action'} />
+                                    </InputAdornment>
+                                ),
+                            }}
                         />
-                        {errors.username && (
-                            <span className="error-message">{errors.username}</span>
-                        )}
-                    </div>
 
-                    <div className="form-group">
-                        <label htmlFor="password">Password</label>
-                        <input
-                            type="password"
-                            id="password"
-                            name="password"
-                            value={formData.password}
-                            onChange={handleChange}
-                            className={errors.password ? 'error' : ''}
-                            placeholder="Enter your password"
-                        />
-                        {errors.password && (
-                            <span className="error-message">{errors.password}</span>
-                        )}
-                    </div>
+                        <Box>
+                            <TextField
+                                fullWidth
+                                label="Password"
+                                name="password"
+                                type={showPassword ? 'text' : 'password'}
+                                value={formData.password}
+                                onChange={handleChange}
+                                error={!!errors.password}
+                                helperText={errors.password}
+                                placeholder="Enter your password"
+                                InputProps={{
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <LockIcon color={errors.password ? 'error' : 'action'} />
+                                        </InputAdornment>
+                                    ),
+                                    endAdornment: (
+                                        <InputAdornment position="end">
+                                            <IconButton
+                                                aria-label="toggle password visibility"
+                                                onClick={handleClickShowPassword}
+                                                edge="end"
+                                            >
+                                                {showPassword ? <VisibilityOff /> : <Visibility />}
+                                            </IconButton>
+                                        </InputAdornment>
+                                    ),
+                                }}
+                            />
+                            {formData.password && (
+                                <PasswordStrengthBox>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Password strength:
+                                        </Typography>
+                                        <Typography
+                                            variant="caption"
+                                            color={`${passwordStrength.color}.main`}
+                                            fontWeight={600}
+                                        >
+                                            {passwordStrength.text}
+                                        </Typography>
+                                    </Box>
+                                    <LinearProgress
+                                        variant="determinate"
+                                        value={passwordStrength.strength}
+                                        color={passwordStrength.color}
+                                        sx={{ height: 4, borderRadius: 2 }}
+                                    />
+                                </PasswordStrengthBox>
+                            )}
+                        </Box>
 
-                    <div className="form-group">
-                        <label htmlFor="confirmPassword">Confirm Password</label>
-                        <input
-                            type="password"
-                            id="confirmPassword"
+                        <TextField
+                            fullWidth
+                            label="Confirm Password"
                             name="confirmPassword"
+                            type={showConfirmPassword ? 'text' : 'password'}
                             value={formData.confirmPassword}
                             onChange={handleChange}
-                            className={errors.confirmPassword ? 'error' : ''}
+                            error={!!errors.confirmPassword}
+                            helperText={errors.confirmPassword}
                             placeholder="Confirm your password"
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <LockOpenIcon color={errors.confirmPassword ? 'error' : 'action'} />
+                                    </InputAdornment>
+                                ),
+                                endAdornment: (
+                                    <InputAdornment position="end">
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            {getConfirmPasswordIcon()}
+                                            <IconButton
+                                                aria-label="toggle confirm password visibility"
+                                                onClick={handleClickShowConfirmPassword}
+                                                edge="end"
+                                            >
+                                                {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
+                                            </IconButton>
+                                        </Box>
+                                    </InputAdornment>
+                                ),
+                            }}
                         />
-                        {errors.confirmPassword && (
-                            <span className="error-message">{errors.confirmPassword}</span>
-                        )}
-                    </div>
 
-                    <button
-                        type="submit"
-                        className="auth-button"
-                        disabled={isLoading}
-                    >
-                        {isLoading ? 'Creating Account...' : 'Sign Up'}
-                    </button>
-                </form>
+                        <Button
+                            type="submit"
+                            fullWidth
+                            variant="contained"
+                            size="large"
+                            disabled={isLoading}
+                            startIcon={isLoading ? <CircularProgress size={20} /> : <PersonAddIcon />}
+                            sx={{ mt: 2, py: 1.5 }}
+                        >
+                            {isLoading ? 'Creating Account...' : 'Create Account'}
+                        </Button>
+                    </FormBox>
+                </Box>
 
-                <p className="auth-link">
-                    Already have an account? <Link to="/login">Login here</Link>
-                </p>
-            </div>
-        </div>
+                <Box sx={{ textAlign: 'center', mt: 3 }}>
+                    <Typography variant="body2" color="text.secondary">
+                        Already have an account?{' '}
+                        <Link
+                            to="/login"
+                            style={{
+                                color: '#667eea',
+                                textDecoration: 'none',
+                                fontWeight: 600
+                            }}
+                        >
+                            Sign in here
+                        </Link>
+                    </Typography>
+                </Box>
+            </SignUpPaper>
+        </SignUpContainer>
     );
 };
 
