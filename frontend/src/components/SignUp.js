@@ -1,164 +1,229 @@
 import React, { useState } from 'react';
-import authService from '../services/authService';
-import './Auth.css';
-import {Link, useNavigate} from "react-router";
+import {
+    Card,
+    CardContent,
+    TextField,
+    Button,
+    Typography,
+    Alert,
+    Box,
+    CircularProgress,
+    InputAdornment,
+    Divider,
+    Link
+} from '@mui/material';
+import {
+    PersonAdd as PersonAddIcon,
+    Person as PersonIcon,
+    Lock as LockIcon,
+    LockOutlined as LockOutlinedIcon
+} from '@mui/icons-material';
+import { styled } from '@mui/material/styles';
+import AuthService from '../services/AuthService'; // Adjust path as needed
 
-const SignUp = () => {
-    const navigate = useNavigate();
+const StyledCard = styled(Card)(({ theme }) => ({
+    maxWidth: 400,
+    margin: '0 auto',
+    marginTop: theme.spacing(6),
+    boxShadow: theme.shadows[8],
+    borderRadius: theme.spacing(2),
+}));
+
+const HeaderBox = styled(Box)(({ theme }) => ({
+    textAlign: 'center',
+    marginBottom: theme.spacing(3),
+    padding: theme.spacing(3),
+    background: `linear-gradient(135deg, ${theme.palette.secondary.main}, ${theme.palette.primary.main})`,
+    borderRadius: `${theme.spacing(2)} ${theme.spacing(2)} 0 0`,
+    color: theme.palette.primary.contrastText,
+}));
+
+const SignUp = ({ onSignUpSuccess, onSwitchToLogin }) => {
     const [formData, setFormData] = useState({
         username: '',
         password: '',
         confirmPassword: ''
     });
-    const [errors, setErrors] = useState({});
-    const [isLoading, setIsLoading] = useState(false);
 
-    const handleChange = (e) => {
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+
+    const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({
             ...prev,
             [name]: value
         }));
-
-        if (errors[name]) {
-            setErrors(prev => ({
-                ...prev,
-                [name]: ''
-            }));
-        }
-    };
-
-    const validateForm = () => {
-        const newErrors = {};
-
-        // Username validation
-        if (!formData.username.trim()) {
-            newErrors.username = 'Username is required';
-        } else if (formData.username.length < 3) {
-            newErrors.username = 'Username must be at least 3 characters';
-        } else if (formData.username.length > 20) {
-            newErrors.username = 'Username must be less than 20 characters';
-        }
-
-        // Password validation
-        if (!formData.password) {
-            newErrors.password = 'Password is required';
-        } else if (formData.password.length < 8) {
-            newErrors.password = 'Password must be at least 8 characters';
-        }
-
-        // Confirm password validation
-        if (!formData.confirmPassword) {
-            newErrors.confirmPassword = 'Please confirm your password';
-        } else if (formData.password !== formData.confirmPassword) {
-            newErrors.confirmPassword = 'Passwords do not match';
-        }
-
-        return newErrors;
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setLoading(true);
+        setError('');
+        setSuccess('');
 
-        const formErrors = validateForm();
-        if (Object.keys(formErrors).length > 0) {
-            setErrors(formErrors);
-            return;
-        }
+        const result = await AuthService.signUp(formData);
 
-        setIsLoading(true);
-        setErrors({});
+        if (result.success) {
+            setSuccess('Account created successfully!');
+            setFormData({
+                username: '',
+                password: '',
+                confirmPassword: ''
+            });
 
-        try {
-            const result = await authService.signUp(formData);
-
-            if (result.success) {
-                alert('Account created successfully!');
-                navigate('/login');
-            } else {
-                setErrors({ general: result.error });
+            if (onSignUpSuccess) {
+                onSignUpSuccess(result.data);
             }
-        } catch (error) {
-            setErrors({ general: 'Something went wrong. Please try again.' });
-        } finally {
-            setIsLoading(false);
+        } else {
+            setError(result.error);
         }
+
+        setLoading(false);
     };
 
     return (
-        <div className="auth-container">
-            <div className="auth-card">
-                <h2>Create Account</h2>
+        <StyledCard>
+            <HeaderBox>
+                <PersonAddIcon sx={{ fontSize: 40, mb: 1 }} />
+                <Typography variant="h4" component="h1" fontWeight="bold">
+                    Sign Up
+                </Typography>
+                <Typography variant="subtitle1" sx={{ opacity: 0.9 }}>
+                    Create your account
+                </Typography>
+            </HeaderBox>
 
-                {errors.general && (
-                    <div className="error-message general-error">
-                        {errors.general}
-                    </div>
+            <CardContent sx={{ p: 3 }}>
+                {error && (
+                    <Alert
+                        severity="error"
+                        onClose={() => setError('')}
+                        sx={{ mb: 3 }}
+                    >
+                        {error}
+                    </Alert>
                 )}
 
-                <form onSubmit={handleSubmit} className="auth-form">
-                    <div className="form-group">
-                        <label htmlFor="username">Username</label>
-                        <input
-                            type="text"
-                            id="username"
-                            name="username"
-                            value={formData.username}
-                            onChange={handleChange}
-                            className={errors.username ? 'error' : ''}
-                            placeholder="Enter your username"
-                        />
-                        {errors.username && (
-                            <span className="error-message">{errors.username}</span>
-                        )}
-                    </div>
-
-                    <div className="form-group">
-                        <label htmlFor="password">Password</label>
-                        <input
-                            type="password"
-                            id="password"
-                            name="password"
-                            value={formData.password}
-                            onChange={handleChange}
-                            className={errors.password ? 'error' : ''}
-                            placeholder="Enter your password"
-                        />
-                        {errors.password && (
-                            <span className="error-message">{errors.password}</span>
-                        )}
-                    </div>
-
-                    <div className="form-group">
-                        <label htmlFor="confirmPassword">Confirm Password</label>
-                        <input
-                            type="password"
-                            id="confirmPassword"
-                            name="confirmPassword"
-                            value={formData.confirmPassword}
-                            onChange={handleChange}
-                            className={errors.confirmPassword ? 'error' : ''}
-                            placeholder="Confirm your password"
-                        />
-                        {errors.confirmPassword && (
-                            <span className="error-message">{errors.confirmPassword}</span>
-                        )}
-                    </div>
-
-                    <button
-                        type="submit"
-                        className="auth-button"
-                        disabled={isLoading}
+                {success && (
+                    <Alert
+                        severity="success"
+                        onClose={() => setSuccess('')}
+                        sx={{ mb: 3 }}
                     >
-                        {isLoading ? 'Creating Account...' : 'Sign Up'}
-                    </button>
-                </form>
+                        {success}
+                    </Alert>
+                )}
 
-                <p className="auth-link">
-                    Already have an account? <Link to="/login">Login here</Link>
-                </p>
-            </div>
-        </div>
+                <Box component="form" onSubmit={handleSubmit}>
+                    <TextField
+                        fullWidth
+                        required
+                        label="Username"
+                        name="username"
+                        value={formData.username}
+                        onChange={handleInputChange}
+                        slotProps={{
+                            input: {
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <PersonIcon color="action" />
+                                    </InputAdornment>
+                                ),
+                            }
+                        }}
+                        sx={{ mb: 3 }}
+                    />
+
+                    <TextField
+                        fullWidth
+                        required
+                        type="password"
+                        label="Password"
+                        name="password"
+                        value={formData.password}
+                        onChange={handleInputChange}
+                        slotProps={{
+                            input: {
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <LockIcon color="action" />
+                                    </InputAdornment>
+                                ),
+                            }
+                        }}
+                        sx={{ mb: 3 }}
+                    />
+
+                    <TextField
+                        fullWidth
+                        required
+                        type="password"
+                        label="Confirm Password"
+                        name="confirmPassword"
+                        value={formData.confirmPassword}
+                        onChange={handleInputChange}
+                        slotProps={{
+                            input: {
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <LockOutlinedIcon color="action" />
+                                    </InputAdornment>
+                                ),
+                            }
+                        }}
+                        sx={{ mb: 3 }}
+                    />
+
+                    <Button
+                        type="submit"
+                        variant="contained"
+                        size="large"
+                        fullWidthgit
+                        disabled={loading}
+                        startIcon={loading ? <CircularProgress size={20} /> : <PersonAddIcon />}
+                        sx={{
+                            py: 1.5,
+                            mb: 3,
+                            background: 'linear-gradient(135deg, #764ba2, #667eea)',
+                            '&:hover': {
+                                background: 'linear-gradient(135deg, #6a419a, #5a6fd8)',
+                                transform: 'translateY(-2px)',
+                                boxShadow: (theme) => theme.shadows[8],
+                            },
+                            transition: 'all 0.3s ease',
+                        }}
+                    >
+                        {loading ? 'Creating Account...' : 'Create Account'}
+                    </Button>
+
+                    <Divider sx={{ mb: 3 }} />
+
+                    <Box textAlign="center">
+                        <Typography variant="body2" color="text.secondary">
+                            Already have an account?{' '}
+                            <Link
+                                component="button"
+                                type="button"
+                                variant="body2"
+                                onClick={onSwitchToLogin}
+                                sx={{
+                                    textDecoration: 'none',
+                                    fontWeight: 'bold',
+                                    color: 'primary.main',
+                                    '&:hover': {
+                                        textDecoration: 'underline',
+                                    },
+                                }}
+                            >
+                                Sign in
+                            </Link>
+                        </Typography>
+                    </Box>
+                </Box>
+            </CardContent>
+        </StyledCard>
     );
 };
 

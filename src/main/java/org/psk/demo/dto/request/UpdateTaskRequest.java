@@ -12,6 +12,8 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UpdateTaskRequest {
+    private Long version;
+
     @Size(max = 100, message = "Title must be less than 100 characters")
     private String title;
 

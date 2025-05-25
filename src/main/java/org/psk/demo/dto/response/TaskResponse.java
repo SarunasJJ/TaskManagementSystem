@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class TaskResponse {
     private Long id;
+    private Long version;
     private String title;
     private String description;
     private LocalDateTime deadline;
