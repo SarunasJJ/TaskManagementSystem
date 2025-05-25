@@ -357,20 +357,6 @@ const CreateGroup = () => {
                             rows={4}
                             inputProps={{ maxLength: 500 }}
                         />
-
-                        <Card variant="outlined" sx={{ backgroundColor: 'background.default' }}>
-                            <CardContent>
-                                <Typography variant="h6" gutterBottom color="primary">
-                                    📋 What happens next?
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    • You'll become the group creator and admin<br/>
-                                    • You can invite team members to join<br/>
-                                    • Start assigning tasks and managing projects<br/>
-                                    • Track progress and collaborate effectively
-                                </Typography>
-                            </CardContent>
-                        </Card>
                     </FormBox>
 
                     <ActionBox>

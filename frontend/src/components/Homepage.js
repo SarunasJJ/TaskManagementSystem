@@ -13,16 +13,9 @@ import {
     IconButton,
     Tabs,
     Tab,
-    Paper,
-    List,
-    ListItem,
-    ListItemIcon,
-    ListItemText,
-    Chip,
-    CircularProgress,
-    Tooltip,
     Avatar,
-    Divider
+    CircularProgress,
+    Tooltip
 } from '@mui/material';
 import {
     Home as HomeIcon,
@@ -31,11 +24,7 @@ import {
     Logout as LogoutIcon,
     Dashboard as DashboardIcon,
     Assignment as TaskIcon,
-    Timeline as ProjectIcon,
-    TrendingUp as AnalyticsIcon,
-    People as PeopleIcon,
-    Schedule as ScheduleIcon,
-    Notifications as NotificationsIcon
+    People as PeopleIcon
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import authService from '../services/authService';
@@ -78,12 +67,6 @@ const WelcomeBox = styled(Box)(({ theme }) => ({
     borderRadius: theme.spacing(2),
     marginBottom: theme.spacing(3),
     textAlign: 'center',
-}));
-
-const ComingSoonCard = styled(Card)(({ theme }) => ({
-    backgroundColor: theme.palette.info.light,
-    color: theme.palette.info.contrastText,
-    marginTop: theme.spacing(3),
 }));
 
 const Homepage = () => {
@@ -156,14 +139,6 @@ const Homepage = () => {
         }
     ];
 
-    const comingSoonFeatures = [
-        { icon: <TaskIcon />, text: 'Task assignment and tracking' },
-        { icon: <ProjectIcon />, text: 'Project management tools' },
-        { icon: <ScheduleIcon />, text: 'Timeline and deadline management' },
-        { icon: <AnalyticsIcon />, text: 'Progress analytics and reports' },
-        { icon: <NotificationsIcon />, text: 'Real-time notifications' }
-    ];
-
     if (!user) {
         return (
             <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
@@ -230,7 +205,7 @@ const Homepage = () => {
 
                 {/* Stats Cards */}
                 <Grid container spacing={3} sx={{ mb: 4 }}>
-                    <Grid item xs={12} sm={4}>
+                    <Grid item xs={12} sm={6}>
                         <StatsCard>
                             <PeopleIcon sx={{ fontSize: 48, mb: 1 }} />
                             <Typography variant="h3" component="div" fontWeight="bold">
@@ -241,7 +216,7 @@ const Homepage = () => {
                             </Typography>
                         </StatsCard>
                     </Grid>
-                    <Grid item xs={12} sm={4}>
+                    <Grid item xs={12} sm={6}>
                         <StatsCard>
                             <TaskIcon sx={{ fontSize: 48, mb: 1 }} />
                             <Typography variant="h3" component="div" fontWeight="bold">
@@ -249,17 +224,6 @@ const Homepage = () => {
                             </Typography>
                             <Typography variant="h6">
                                 Active Tasks
-                            </Typography>
-                        </StatsCard>
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <StatsCard>
-                            <ProjectIcon sx={{ fontSize: 48, mb: 1 }} />
-                            <Typography variant="h3" component="div" fontWeight="bold">
-                                0
-                            </Typography>
-                            <Typography variant="h6">
-                                Projects
                             </Typography>
                         </StatsCard>
                     </Grid>
@@ -298,31 +262,6 @@ const Homepage = () => {
                         </Grid>
                     ))}
                 </Grid>
-
-                {/* Coming Soon Features */}
-                <ComingSoonCard>
-                    <CardContent>
-                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                            <Typography variant="h5" component="h3" fontWeight={600} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                🚀 Coming Soon
-                            </Typography>
-                        </Box>
-                        <Divider sx={{ mb: 2, backgroundColor: 'rgba(255, 255, 255, 0.3)' }} />
-                        <List dense>
-                            {comingSoonFeatures.map((feature, index) => (
-                                <ListItem key={index} sx={{ py: 0.5 }}>
-                                    <ListItemIcon sx={{ color: 'inherit', minWidth: 36 }}>
-                                        {feature.icon}
-                                    </ListItemIcon>
-                                    <ListItemText
-                                        primary={feature.text}
-                                        primaryTypographyProps={{ color: 'inherit' }}
-                                    />
-                                </ListItem>
-                            ))}
-                        </List>
-                    </CardContent>
-                </ComingSoonCard>
             </Container>
         </Box>
     );
