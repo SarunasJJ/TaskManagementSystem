@@ -6,6 +6,7 @@ import SignUp from "./components/SignUp";
 import Homepage from "./components/Homepage";
 import CreateGroup from "./components/CreateGroup";
 import GroupView from "./components/GroupView";
+import CreateTaskPage from "./components/CreateTaskPage";
 import MuiThemeProvider from "./components/MuiThemeProvider";
 
 const ProtectedRoute = ({children}) => {
@@ -30,10 +31,13 @@ function App() {
                         {/* Homepage now shows groups list directly */}
                         <Route path="/homepage" element={<ProtectedRoute><Homepage/></ProtectedRoute>} />
 
-                        {/* Group Routes - Single component handles both view and management */}
+                        {/* Group Routes */}
                         <Route path="/groups" element={<Navigate to="/homepage" />} />
                         <Route path="/groups/create" element={<ProtectedRoute><CreateGroup/></ProtectedRoute>} />
                         <Route path="/groups/:groupId" element={<ProtectedRoute><GroupView/></ProtectedRoute>} />
+
+                        {/* Task Routes */}
+                        <Route path="/groups/:groupId/tasks/create" element={<ProtectedRoute><CreateTaskPage/></ProtectedRoute>} />
 
                         <Route path="*" element={<Navigate to="/homepage" />} />
                     </Routes>

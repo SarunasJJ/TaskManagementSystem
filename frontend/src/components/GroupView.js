@@ -27,7 +27,6 @@ import {
     Tooltip,
     Fade,
     CircularProgress,
-    Collapse,
     Switch,
     FormControlLabel
 } from '@mui/material';
@@ -42,13 +41,13 @@ import {
     CalendarToday as CalendarIcon,
     Warning as WarningIcon,
     Settings as SettingsIcon,
-    ExpandMore as ExpandMoreIcon,
-    ExpandLess as ExpandLessIcon
+    Assignment as TaskIcon
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import groupService from '../services/groupService';
 import authService from '../services/authService';
 import Navbar from './Navbar';
+import TaskBoard from "./TaskBoard";
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
     padding: theme.spacing(3),
@@ -266,42 +265,45 @@ const GroupView = () => {
                         </IconButton>
                     </Tooltip>
 
-                    {isCreator() && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <FormControlLabel
-                                control={
-                                    <Switch
-                                        checked={managementMode}
-                                        onChange={(e) => setManagementMode(e.target.checked)}
-                                        color="primary"
-                                    />
-                                }
-                                label={
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <SettingsIcon />
-                                        <Typography variant="body1">
-                                            Management Mode
-                                        </Typography>
-                                    </Box>
-                                }
-                            />
-                            {managementMode && (
-                                <Tooltip title="Delete Group">
-                                    <IconButton
-                                        color="error"
-                                        onClick={() => setDeleteGroupDialog(true)}
-                                        sx={{
-                                            '&:hover': {
-                                                backgroundColor: 'rgba(244, 67, 54, 0.1)'
-                                            }
-                                        }}
-                                    >
-                                        <DeleteIcon />
-                                    </IconButton>
-                                </Tooltip>
-                            )}
-                        </Box>
-                    )}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+
+                        {isCreator() && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                <FormControlLabel
+                                    control={
+                                        <Switch
+                                            checked={managementMode}
+                                            onChange={(e) => setManagementMode(e.target.checked)}
+                                            color="primary"
+                                        />
+                                    }
+                                    label={
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <SettingsIcon />
+                                            <Typography variant="body1">
+                                                Management Mode
+                                            </Typography>
+                                        </Box>
+                                    }
+                                />
+                                {managementMode && (
+                                    <Tooltip title="Delete Group">
+                                        <IconButton
+                                            color="error"
+                                            onClick={() => setDeleteGroupDialog(true)}
+                                            sx={{
+                                                '&:hover': {
+                                                    backgroundColor: 'rgba(244, 67, 54, 0.1)'
+                                                }
+                                            }}
+                                        >
+                                            <DeleteIcon />
+                                        </IconButton>
+                                    </Tooltip>
+                                )}
+                            </Box>
+                        )}
+                    </Box>
                 </Box>
 
                 {success && (
@@ -359,49 +361,12 @@ const GroupView = () => {
                             />
                         )}
                     </Box>
-
-                    <Grid container spacing={3}>
-                        <Grid item xs={12} sm={4}>
-                            <StatsCard>
-                                <CardContent>
-                                    <PeopleIcon sx={{ fontSize: 40, mb: 1 }} />
-                                    <Typography variant="h4" component="div" fontWeight="bold">
-                                        {group.memberCount}
-                                    </Typography>
-                                    <Typography variant="body1">
-                                        {group.memberCount === 1 ? 'Member' : 'Members'}
-                                    </Typography>
-                                </CardContent>
-                            </StatsCard>
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                            <Card sx={{ textAlign: 'center' }}>
-                                <CardContent>
-                                    <PersonIcon color="primary" sx={{ fontSize: 40, mb: 1 }} />
-                                    <Typography variant="h6" component="div" fontWeight="bold">
-                                        Creator
-                                    </Typography>
-                                    <Typography variant="body1" color="text.secondary">
-                                        {group.creator.username}
-                                    </Typography>
-                                </CardContent>
-                            </Card>
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                            <Card sx={{ textAlign: 'center' }}>
-                                <CardContent>
-                                    <CalendarIcon color="primary" sx={{ fontSize: 40, mb: 1 }} />
-                                    <Typography variant="h6" component="div" fontWeight="bold">
-                                        Created
-                                    </Typography>
-                                    <Typography variant="body1" color="text.secondary">
-                                        {formatDate(group.createdAt)}
-                                    </Typography>
-                                </CardContent>
-                            </Card>
-                        </Grid>
-                    </Grid>
                 </StyledPaper>
+
+                <TaskBoard
+                    groupId={groupId}
+                    currentUser={currentUser}
+                />
 
                 {/* Members Section */}
                 <StyledPaper>
