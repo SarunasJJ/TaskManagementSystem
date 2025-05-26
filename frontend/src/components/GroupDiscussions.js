@@ -8,45 +8,34 @@ import {
     List,
     ListItem,
     Avatar,
-    IconButton,
-    Menu,
-    MenuItem,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
     Alert,
     Chip,
     CircularProgress,
     Divider,
     InputAdornment,
     Tooltip,
-    Fade,
-    Collapse
+    Fade, IconButton
 } from '@mui/material';
 import {
     Send as SendIcon,
-    MoreVert as MoreVertIcon,
-    Edit as EditIcon,
-    Delete as DeleteIcon,
     Message as MessageIcon,
-    Check as CheckIcon,
-    Refresh as RefreshIcon,
+    Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import commentService from '../services/commentService';
 import authService from '../services/authService';
 
 const DiscussionContainer = styled(Paper)(({ theme }) => ({
-    height: '70vh',
+    height: '75vh',
     display: 'flex',
     flexDirection: 'column',
     borderRadius: theme.spacing(2),
     overflow: 'hidden',
+    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
 }));
 
 const HeaderBox = styled(Box)(({ theme }) => ({
-    padding: theme.spacing(2),
+    padding: theme.spacing(2.5),
     background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     color: 'white',
     display: 'flex',
@@ -58,6 +47,7 @@ const MessagesContainer = styled(Box)(({ theme }) => ({
     flex: 1,
     overflow: 'auto',
     padding: theme.spacing(1),
+    backgroundColor: theme.palette.grey[50],
     '&::-webkit-scrollbar': {
         width: '8px',
     },
@@ -79,19 +69,22 @@ const MessageItem = styled(ListItem)(({ theme, isOwn }) => ({
     justifyContent: isOwn ? 'flex-end' : 'flex-start',
     alignItems: 'flex-start',
     padding: theme.spacing(1),
-    '&:hover .message-actions': {
-        opacity: 1,
-    },
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
 }));
 
 const MessageBubble = styled(Paper)(({ theme, isOwn }) => ({
     maxWidth: '70%',
+    minWidth: 'fit-content',
     padding: theme.spacing(1.5, 2),
     borderRadius: theme.spacing(2),
     position: 'relative',
-    backgroundColor: isOwn ? theme.palette.primary.main : theme.palette.grey[100],
+    backgroundColor: isOwn ? theme.palette.primary.main : theme.palette.background.paper,
     color: isOwn ? theme.palette.primary.contrastText : theme.palette.text.primary,
     wordWrap: 'break-word',
+    wordBreak: 'break-word',
+    boxShadow: theme.shadows[2],
+    display: 'inline-block',
     ...(isOwn && {
         borderBottomRightRadius: theme.spacing(0.5),
     }),
@@ -108,9 +101,17 @@ const MessageActions = styled(Box)(({ theme }) => ({
 }));
 
 const InputContainer = styled(Box)(({ theme }) => ({
-    padding: theme.spacing(2),
+    padding: theme.spacing(2.5),
     borderTop: `1px solid ${theme.palette.divider}`,
     backgroundColor: theme.palette.background.paper,
+}));
+
+const StatsContainer = styled(Box)(({ theme }) => ({
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(2),
+    fontSize: '0.875rem',
+    opacity: 0.9,
 }));
 
 const GroupDiscussions = ({ groupId, currentUser }) => {
@@ -119,19 +120,16 @@ const GroupDiscussions = ({ groupId, currentUser }) => {
     const [loading, setLoading] = useState(true);
     const [posting, setPosting] = useState(false);
     const [error, setError] = useState('');
-
-    // Menu and dialog states
-    const [anchorEl, setAnchorEl] = useState(null);
-    const [selectedComment, setSelectedComment] = useState(null);
-    const [editDialog, setEditDialog] = useState(false);
-    const [deleteDialog, setDeleteDialog] = useState(false);
-    const [editContent, setEditContent] = useState('');
+    const [refreshing, setRefreshing] = useState(false);
 
     const messagesEndRef = useRef(null);
     const user = currentUser || authService.getCurrentUser();
 
     useEffect(() => {
         fetchComments();
+        // Auto-refresh every 30 seconds
+        const interval = setInterval(fetchComments, 30000);
+        return () => clearInterval(interval);
     }, [groupId]);
 
     useEffect(() => {
@@ -142,8 +140,12 @@ const GroupDiscussions = ({ groupId, currentUser }) => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
-    const fetchComments = async () => {
-        setLoading(true);
+    const fetchComments = async (showRefreshIndicator = false) => {
+        if (showRefreshIndicator) {
+            setRefreshing(true);
+        } else {
+            setLoading(true);
+        }
         setError('');
 
         try {
@@ -157,7 +159,12 @@ const GroupDiscussions = ({ groupId, currentUser }) => {
             setError('Failed to load comments');
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
+    };
+
+    const handleRefresh = () => {
+        fetchComments(true);
     };
 
     const handlePostComment = async () => {
@@ -188,72 +195,14 @@ const GroupDiscussions = ({ groupId, currentUser }) => {
         }
     };
 
-    const handleMenuOpen = (event, comment) => {
-        setAnchorEl(event.currentTarget);
-        setSelectedComment(comment);
-    };
-
-    const handleMenuClose = () => {
-        setAnchorEl(null);
-        setSelectedComment(null);
-    };
-
-    const handleEditComment = () => {
-        setEditContent(selectedComment.content);
-        setEditDialog(true);
-        handleMenuClose();
-    };
-
-    const handleDeleteComment = () => {
-        setDeleteDialog(true);
-        handleMenuClose();
-    };
-
-    const confirmEdit = async () => {
-        if (!editContent.trim()) return;
-
-        try {
-            const result = await commentService.updateComment(groupId, selectedComment.id, editContent.trim());
-            if (result.success) {
-                setEditDialog(false);
-                setEditContent('');
-                await fetchComments();
-            } else {
-                setError(result.error);
-            }
-        } catch (error) {
-            setError('Failed to update comment');
-        }
-    };
-
-    const confirmDelete = async () => {
-        try {
-            const result = await commentService.deleteComment(groupId, selectedComment.id);
-            if (result.success) {
-                setDeleteDialog(false);
-                await fetchComments();
-            } else {
-                setError(result.error);
-            }
-        } catch (error) {
-            setError('Failed to delete comment');
-        }
-    };
-
     const formatDate = (dateString) => {
         const date = new Date(dateString);
-        const now = new Date();
-        const diffInMinutes = Math.floor((now - date) / (1000 * 60));
-
-        if (diffInMinutes < 1) return 'Just now';
-        if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-        if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
-        if (diffInMinutes < 10080) return `${Math.floor(diffInMinutes / 1440)}d ago`;
-
-        return date.toLocaleDateString('en-US', {
+        return date.toLocaleString('en-US', {
+            year: 'numeric',
             month: 'short',
             day: 'numeric',
-            year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+            hour: '2-digit',
+            minute: '2-digit'
         });
     };
 
@@ -262,6 +211,8 @@ const GroupDiscussions = ({ groupId, currentUser }) => {
         const index = username ? username.charCodeAt(0) % colors.length : 0;
         return colors[index];
     };
+
+
 
     if (loading) {
         return (
@@ -296,13 +247,15 @@ const GroupDiscussions = ({ groupId, currentUser }) => {
                     <MessageIcon />
                     <Typography variant="h6">Group Discussions</Typography>
                 </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Tooltip title="Refresh">
-                        <IconButton color="inherit" onClick={fetchComments}>
-                            <RefreshIcon />
-                        </IconButton>
-                    </Tooltip>
-                </Box>
+                <Tooltip title="Refresh">
+                    <IconButton
+                        color="inherit"
+                        onClick={handleRefresh}
+                        disabled={refreshing}
+                    >
+                        {refreshing ? <CircularProgress size={20} color="inherit" /> : <RefreshIcon />}
+                    </IconButton>
+                </Tooltip>
             </HeaderBox>
 
             {error && (
@@ -332,7 +285,7 @@ const GroupDiscussions = ({ groupId, currentUser }) => {
                         <Typography variant="h6" color="text.secondary" gutterBottom>
                             No messages yet
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                             Start the conversation by posting the first message!
                         </Typography>
                     </Box>
@@ -342,8 +295,19 @@ const GroupDiscussions = ({ groupId, currentUser }) => {
                             const isOwn = comment.authorId === user?.id;
                             const showAvatar = index === 0 || comments[index - 1].authorId !== comment.authorId;
 
+                            // Check if we need extra spacing (30+ minutes gap from same user)
+                            const needsSpacing = index > 0 &&
+                                comments[index - 1].authorId === comment.authorId &&
+                                new Date(comment.createdAt).getTime() - new Date(comments[index - 1].createdAt).getTime() > 1800000; // 30 minutes
+
                             return (
-                                <MessageItem key={comment.id} isOwn={isOwn}>
+                                <MessageItem
+                                    key={comment.id}
+                                    isOwn={isOwn}
+                                    sx={{
+                                        marginTop: needsSpacing ? 3 : 0
+                                    }}
+                                >
                                     {!isOwn && (
                                         <Avatar
                                             sx={{
@@ -359,65 +323,35 @@ const GroupDiscussions = ({ groupId, currentUser }) => {
                                         </Avatar>
                                     )}
 
-                                    <Box sx={{ maxWidth: '70%' }}>
+                                    <Box sx={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: isOwn ? 'flex-end' : 'flex-start',
+                                        maxWidth: '70%',
+                                        width: 'auto'
+                                    }}>
                                         {showAvatar && !isOwn && (
                                             <Typography
                                                 variant="caption"
                                                 color="text.secondary"
-                                                sx={{ ml: 1, mb: 0.5, display: 'block' }}
+                                                sx={{ ml: 1, mb: 0.5, fontWeight: 600 }}
                                             >
                                                 {comment.authorUsername}
                                             </Typography>
                                         )}
 
-                                        <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1 }}>
-                                            {isOwn && (comment.canEdit || comment.canDelete) && (
-                                                <MessageActions className="message-actions">
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={(e) => handleMenuOpen(e, comment)}
-                                                    >
-                                                        <MoreVertIcon fontSize="small" />
-                                                    </IconButton>
-                                                </MessageActions>
-                                            )}
-
-                                            <MessageBubble isOwn={isOwn} elevation={1}>
-                                                <Typography
-                                                    variant="body1"
-                                                    sx={{ whiteSpace: 'pre-wrap' }}
-                                                >
-                                                    {comment.content}
-                                                </Typography>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', mt: 0.5, gap: 1 }}>
-                                                    <Typography
-                                                        variant="caption"
-                                                        sx={{
-                                                            opacity: 0.7,
-                                                            fontSize: '0.7rem'
-                                                        }}
-                                                    >
-                                                        {formatDate(comment.createdAt)}
-                                                    </Typography>
-                                                    {comment.isEdited && (
-                                                        <Tooltip title="Edited">
-                                                            <EditIcon sx={{ fontSize: 12, opacity: 0.7 }} />
-                                                        </Tooltip>
-                                                    )}
-                                                </Box>
-                                            </MessageBubble>
-
-                                            {!isOwn && (comment.canEdit || comment.canDelete) && (
-                                                <MessageActions className="message-actions">
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={(e) => handleMenuOpen(e, comment)}
-                                                    >
-                                                        <MoreVertIcon fontSize="small" />
-                                                    </IconButton>
-                                                </MessageActions>
-                                            )}
-                                        </Box>
+                                        <MessageBubble isOwn={isOwn} elevation={isOwn ? 2 : 1}>
+                                            <Typography
+                                                variant="body1"
+                                                sx={{
+                                                    whiteSpace: 'pre-wrap',
+                                                    lineHeight: 1.4,
+                                                    margin: 0
+                                                }}
+                                            >
+                                                {comment.content}
+                                            </Typography>
+                                        </MessageBubble>
                                     </Box>
 
                                     {isOwn && (
@@ -455,86 +389,50 @@ const GroupDiscussions = ({ groupId, currentUser }) => {
                         disabled={posting}
                         variant="outlined"
                         size="small"
+                        sx={{
+                            '& .MuiOutlinedInput-root': {
+                                borderRadius: 3,
+                                backgroundColor: 'background.paper',
+                            }
+                        }}
+                        InputProps={{
+                            endAdornment: newComment.trim() && (
+                                <InputAdornment position="end">
+                                    <Typography variant="caption" color="text.secondary">
+                                        {newComment.length}/1000
+                                    </Typography>
+                                </InputAdornment>
+                            )
+                        }}
                     />
                     <Button
                         variant="contained"
                         onClick={handlePostComment}
-                        disabled={!newComment.trim() || posting}
+                        disabled={!newComment.trim() || posting || newComment.length > 1000}
                         startIcon={posting ? <CircularProgress size={20} /> : <SendIcon />}
-                        sx={{ minWidth: 120 }}
+                        sx={{
+                            minWidth: 120,
+                            borderRadius: 3,
+                            textTransform: 'none',
+                            fontWeight: 600
+                        }}
                     >
                         {posting ? 'Sending...' : 'Send'}
                     </Button>
                 </Box>
-            </InputContainer>
-
-            {/* Context Menu */}
-            <Menu
-                anchorEl={anchorEl}
-                open={Boolean(anchorEl)}
-                onClose={handleMenuClose}
-            >
-                {selectedComment?.canEdit && (
-                    <MenuItem onClick={handleEditComment}>
-                        <EditIcon sx={{ mr: 1 }} fontSize="small" />
-                        Edit
-                    </MenuItem>
-                )}
-                {selectedComment?.canDelete && (
-                    <MenuItem onClick={handleDeleteComment} sx={{ color: 'error.main' }}>
-                        <DeleteIcon sx={{ mr: 1 }} fontSize="small" />
-                        Delete
-                    </MenuItem>
-                )}
-            </Menu>
-
-            {/* Edit Dialog */}
-            <Dialog open={editDialog} onClose={() => setEditDialog(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Edit Message</DialogTitle>
-                <DialogContent>
-                    <TextField
-                        fullWidth
-                        multiline
-                        rows={4}
-                        value={editContent}
-                        onChange={(e) => setEditContent(e.target.value)}
-                        placeholder="Edit your message..."
-                        sx={{ mt: 1 }}
-                    />
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setEditDialog(false)}>Cancel</Button>
-                    <Button
-                        onClick={confirmEdit}
-                        variant="contained"
-                        disabled={!editContent.trim()}
-                        startIcon={<CheckIcon />}
+                {newComment.length > 900 && (
+                    <Typography
+                        variant="caption"
+                        color={newComment.length > 1000 ? 'error' : 'warning.main'}
+                        sx={{ mt: 0.5, display: 'block' }}
                     >
-                        Save Changes
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
-            {/* Delete Dialog */}
-            <Dialog open={deleteDialog} onClose={() => setDeleteDialog(false)}>
-                <DialogTitle>Delete Message</DialogTitle>
-                <DialogContent>
-                    <Typography>
-                        Are you sure you want to delete this message? This action cannot be undone.
+                        {newComment.length > 1000
+                            ? `Message too long (${newComment.length}/1000 characters)`
+                            : `${1000 - newComment.length} characters remaining`
+                        }
                     </Typography>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setDeleteDialog(false)}>Cancel</Button>
-                    <Button
-                        onClick={confirmDelete}
-                        color="error"
-                        variant="contained"
-                        startIcon={<DeleteIcon />}
-                    >
-                        Delete
-                    </Button>
-                </DialogActions>
-            </Dialog>
+                )}
+            </InputContainer>
         </DiscussionContainer>
     );
 };

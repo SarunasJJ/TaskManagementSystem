@@ -28,7 +28,9 @@ import {
     Fade,
     CircularProgress,
     Switch,
-    FormControlLabel
+    FormControlLabel,
+    Tab,
+    Tabs
 } from '@mui/material';
 import {
     ArrowBack,
@@ -41,13 +43,15 @@ import {
     CalendarToday as CalendarIcon,
     Warning as WarningIcon,
     Settings as SettingsIcon,
-    Assignment as TaskIcon
+    Assignment as TaskIcon,
+    Message as MessageIcon
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import groupService from '../services/groupService';
 import authService from '../services/authService';
 import Navbar from './Navbar';
 import TaskBoard from "./TaskBoard";
+import GroupDiscussions from "./GroupDiscussions";
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
     padding: theme.spacing(3),
@@ -56,10 +60,8 @@ const StyledPaper = styled(Paper)(({ theme }) => ({
     boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
 }));
 
-const StatsCard = styled(Card)(({ theme }) => ({
-    textAlign: 'center',
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    color: 'white',
+const TabPanel = styled(Box)(({ theme }) => ({
+    padding: theme.spacing(2, 0),
 }));
 
 const MemberAvatar = styled(Avatar)(({ theme, username }) => {
@@ -82,6 +84,7 @@ const GroupView = () => {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [currentUser, setCurrentUser] = useState(null);
+    const [activeTab, setActiveTab] = useState(0);
 
     // Management mode toggle
     const [managementMode, setManagementMode] = useState(false);
@@ -219,6 +222,10 @@ const GroupView = () => {
         });
     };
 
+    const handleTabChange = (event, newValue) => {
+        setActiveTab(newValue);
+    };
+
     if (loading) {
         return (
             <Box>
@@ -257,7 +264,7 @@ const GroupView = () => {
         <Box>
             <Navbar user={currentUser} />
 
-            <Container maxWidth="md" sx={{ mt: 2 }}>
+            <Container maxWidth="lg" sx={{ mt: 2 }}>
                 <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Tooltip title="Back to Homepage">
                         <IconButton onClick={() => navigate('/homepage')} color="primary">
@@ -266,7 +273,6 @@ const GroupView = () => {
                     </Tooltip>
 
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-
                         {isCreator() && (
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                 <FormControlLabel
@@ -361,81 +367,120 @@ const GroupView = () => {
                             />
                         )}
                     </Box>
-                </StyledPaper>
 
-                <TaskBoard
-                    groupId={groupId}
-                    currentUser={currentUser}
-                />
-
-                {/* Members Section */}
-                <StyledPaper>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                        <Typography variant="h5" component="h2" fontWeight={600}>
-                            Group Members ({group.memberCount})
-                        </Typography>
-                        {isCreator() && managementMode && (
-                            <Button
-                                variant="contained"
-                                startIcon={<PersonAddIcon />}
-                                onClick={() => setAddMemberDialog(true)}
-                            >
-                                Add Member
-                            </Button>
-                        )}
+                    {/* Tabs Navigation */}
+                    <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                        <Tabs value={activeTab} onChange={handleTabChange} aria-label="group sections">
+                            <Tab
+                                icon={<TaskIcon />}
+                                label="Tasks"
+                                sx={{ textTransform: 'none', fontWeight: 600 }}
+                            />
+                            <Tab
+                                icon={<MessageIcon />}
+                                label="Discussions"
+                                sx={{ textTransform: 'none', fontWeight: 600 }}
+                            />
+                            <Tab
+                                icon={<PeopleIcon />}
+                                label={`Members (${group.memberCount})`}
+                                sx={{ textTransform: 'none', fontWeight: 600 }}
+                            />
+                        </Tabs>
                     </Box>
-
-                    <List>
-                        {group.members.map((member, index) => (
-                            <React.Fragment key={member.id}>
-                                <ListItem sx={{ py: 2 }}>
-                                    <ListItemAvatar>
-                                        <MemberAvatar username={member.username}>
-                                            {member.username.charAt(0).toUpperCase()}
-                                        </MemberAvatar>
-                                    </ListItemAvatar>
-                                    <ListItemText
-                                        primary={
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                <Typography variant="h6">
-                                                    {member.username}
-                                                </Typography>
-                                                {member.id === group.creator.id && (
-                                                    <Chip
-                                                        label="Creator"
-                                                        size="small"
-                                                        color="primary"
-                                                        icon={<PersonIcon />}
-                                                    />
-                                                )}
-                                            </Box>
-                                        }
-                                        secondary={`Member since ${formatDate(group.createdAt)}`}
-                                    />
-                                    {isCreator() && managementMode && member.id !== group.creator.id && (
-                                        <ListItemSecondaryAction>
-                                            <Tooltip title="Remove Member">
-                                                <IconButton
-                                                    color="error"
-                                                    onClick={() => openRemoveMemberDialog(member)}
-                                                >
-                                                    <DeleteIcon />
-                                                </IconButton>
-                                            </Tooltip>
-                                        </ListItemSecondaryAction>
-                                    )}
-                                </ListItem>
-                                {index < group.members.length - 1 && <Divider />}
-                            </React.Fragment>
-                        ))}
-                    </List>
-
-                    {!isCreator() && (
-                        <Alert severity="info" sx={{ mt: 2 }}>
-                            Only the group creator can manage members.
-                        </Alert>
-                    )}
                 </StyledPaper>
+
+                {/* Tab Content */}
+                {activeTab === 0 && (
+                    <TabPanel>
+                        <TaskBoard
+                            groupId={groupId}
+                            currentUser={currentUser}
+                        />
+                    </TabPanel>
+                )}
+
+                {activeTab === 1 && (
+                    <TabPanel>
+                        <GroupDiscussions
+                            groupId={groupId}
+                            currentUser={currentUser}
+                        />
+                    </TabPanel>
+                )}
+
+                {activeTab === 2 && (
+                    <TabPanel>
+                        {/* Members Section */}
+                        <StyledPaper>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                                <Typography variant="h5" component="h2" fontWeight={600}>
+                                    Group Members ({group.memberCount})
+                                </Typography>
+                                {isCreator() && managementMode && (
+                                    <Button
+                                        variant="contained"
+                                        startIcon={<PersonAddIcon />}
+                                        onClick={() => setAddMemberDialog(true)}
+                                    >
+                                        Add Member
+                                    </Button>
+                                )}
+                            </Box>
+
+                            <List>
+                                {group.members.map((member, index) => (
+                                    <React.Fragment key={member.id}>
+                                        <ListItem sx={{ py: 2 }}>
+                                            <ListItemAvatar>
+                                                <MemberAvatar username={member.username}>
+                                                    {member.username.charAt(0).toUpperCase()}
+                                                </MemberAvatar>
+                                            </ListItemAvatar>
+                                            <ListItemText
+                                                primary={
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                        <Typography variant="h6">
+                                                            {member.username}
+                                                        </Typography>
+                                                        {member.id === group.creator.id && (
+                                                            <Chip
+                                                                label="Creator"
+                                                                size="small"
+                                                                color="primary"
+                                                                icon={<PersonIcon />}
+                                                            />
+                                                        )}
+                                                    </Box>
+                                                }
+                                                secondary={`Member since ${formatDate(group.createdAt)}`}
+                                            />
+                                            {isCreator() && managementMode && member.id !== group.creator.id && (
+                                                <ListItemSecondaryAction>
+                                                    <Tooltip title="Remove Member">
+                                                        <IconButton
+                                                            color="error"
+                                                            onClick={() => openRemoveMemberDialog(member)}
+                                                        >
+                                                            <DeleteIcon />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                </ListItemSecondaryAction>
+                                            )}
+                                        </ListItem>
+                                        {index < group.members.length - 1 && <Divider />}
+                                    </React.Fragment>
+                                ))}
+                            </List>
+
+                            {!isCreator() && (
+                                <Alert severity="info" sx={{ mt: 2 }}>
+                                    Only the group creator can manage members.
+                                </Alert>
+                            )}
+                        </StyledPaper>
+                    </TabPanel>
+                )}
 
                 {/* Add Member Dialog */}
                 <Dialog open={addMemberDialog} onClose={() => setAddMemberDialog(false)} maxWidth="sm" fullWidth>
