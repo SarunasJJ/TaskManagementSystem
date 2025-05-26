@@ -27,10 +27,8 @@ import {
     Tooltip,
     Fade,
     CircularProgress,
-    AppBar,
-    Toolbar,
-    Fab,
-    Collapse
+    Switch,
+    FormControlLabel
 } from '@mui/material';
 import {
     ArrowBack,
@@ -38,20 +36,18 @@ import {
     Delete as DeleteIcon,
     Group as GroupIcon,
     Person as PersonIcon,
-    Close as CloseIcon,
     Check as CheckIcon,
-    Settings as SettingsIcon,
     People as PeopleIcon,
     CalendarToday as CalendarIcon,
-    Edit as EditIcon,
     Warning as WarningIcon,
-    Home as HomeIcon,
-    ExpandMore as ExpandMoreIcon,
-    ExpandLess as ExpandLessIcon
+    Settings as SettingsIcon,
+    Assignment as TaskIcon
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import groupService from '../services/groupService';
 import authService from '../services/authService';
+import Navbar from './Navbar';
+import TaskBoard from "./TaskBoard";
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
     padding: theme.spacing(3),
@@ -78,16 +74,6 @@ const MemberAvatar = styled(Avatar)(({ theme, username }) => {
     };
 });
 
-const ManagementFab = styled(Fab)(({ theme }) => ({
-    position: 'fixed',
-    bottom: theme.spacing(2),
-    right: theme.spacing(2),
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    '&:hover': {
-        background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
-    },
-}));
-
 const GroupView = () => {
     const { groupId } = useParams();
     const navigate = useNavigate();
@@ -96,7 +82,9 @@ const GroupView = () => {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [currentUser, setCurrentUser] = useState(null);
-    const [showManagement, setShowManagement] = useState(false);
+
+    // Management mode toggle
+    const [managementMode, setManagementMode] = useState(false);
 
     // Add Member Dialog State
     const [addMemberDialog, setAddMemberDialog] = useState(false);
@@ -198,7 +186,7 @@ const GroupView = () => {
         try {
             const result = await groupService.deleteGroup(groupId);
             if (result.success) {
-                navigate('/groups', {
+                navigate('/homepage', {
                     state: {
                         message: `Group "${group.name}" has been deleted successfully.`,
                         severity: 'success'
@@ -233,12 +221,15 @@ const GroupView = () => {
 
     if (loading) {
         return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
-                <Box textAlign="center">
-                    <CircularProgress size={60} sx={{ mb: 2 }} />
-                    <Typography variant="h6" color="text.secondary">
-                        Loading group details...
-                    </Typography>
+            <Box>
+                <Navbar user={currentUser} />
+                <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
+                    <Box textAlign="center">
+                        <CircularProgress size={60} sx={{ mb: 2 }} />
+                        <Typography variant="h6" color="text.secondary">
+                            Loading group details...
+                        </Typography>
+                    </Box>
                 </Box>
             </Box>
         );
@@ -246,44 +237,80 @@ const GroupView = () => {
 
     if (error && !group) {
         return (
-            <Container maxWidth="md">
-                <Box textAlign="center" mt={4}>
-                    <Alert severity="error" sx={{ mb: 2 }}>
-                        {error}
-                    </Alert>
-                    <Button variant="contained" onClick={() => navigate('/groups')}>
-                        Back to Groups
-                    </Button>
-                </Box>
-            </Container>
+            <Box>
+                <Navbar user={currentUser} />
+                <Container maxWidth="md">
+                    <Box textAlign="center" mt={4}>
+                        <Alert severity="error" sx={{ mb: 2 }}>
+                            {error}
+                        </Alert>
+                        <Button variant="contained" onClick={() => navigate('/homepage')}>
+                            Back to Homepage
+                        </Button>
+                    </Box>
+                </Container>
+            </Box>
         );
     }
 
     return (
         <Box>
-            <AppBar position="static" sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-                <Toolbar>
-                    <Tooltip title="Homepage">
-                        <IconButton color="inherit" onClick={() => navigate('/homepage')} sx={{ mr: 1 }}>
-                            <HomeIcon />
+            <Navbar user={currentUser} />
+
+            <Container maxWidth="md" sx={{ mt: 2 }}>
+                <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Tooltip title="Back to Homepage">
+                        <IconButton onClick={() => navigate('/homepage')} color="primary">
+                            <ArrowBack />
                         </IconButton>
                     </Tooltip>
-                    <IconButton color="inherit" onClick={() => navigate('/groups')} sx={{ mr: 2 }}>
-                        <ArrowBack />
-                    </IconButton>
-                    <GroupIcon sx={{ mr: 2 }} />
-                    <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-                        {group?.name}
-                    </Typography>
-                </Toolbar>
-            </AppBar>
 
-            <Container maxWidth="md">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+
+                        {isCreator() && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                <FormControlLabel
+                                    control={
+                                        <Switch
+                                            checked={managementMode}
+                                            onChange={(e) => setManagementMode(e.target.checked)}
+                                            color="primary"
+                                        />
+                                    }
+                                    label={
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <SettingsIcon />
+                                            <Typography variant="body1">
+                                                Management Mode
+                                            </Typography>
+                                        </Box>
+                                    }
+                                />
+                                {managementMode && (
+                                    <Tooltip title="Delete Group">
+                                        <IconButton
+                                            color="error"
+                                            onClick={() => setDeleteGroupDialog(true)}
+                                            sx={{
+                                                '&:hover': {
+                                                    backgroundColor: 'rgba(244, 67, 54, 0.1)'
+                                                }
+                                            }}
+                                        >
+                                            <DeleteIcon />
+                                        </IconButton>
+                                    </Tooltip>
+                                )}
+                            </Box>
+                        )}
+                    </Box>
+                </Box>
+
                 {success && (
                     <Fade in>
                         <Alert
                             severity="success"
-                            sx={{ mt: 2 }}
+                            sx={{ mb: 2 }}
                             onClose={() => setSuccess('')}
                         >
                             {success}
@@ -295,7 +322,7 @@ const GroupView = () => {
                     <Fade in>
                         <Alert
                             severity="error"
-                            sx={{ mt: 2 }}
+                            sx={{ mb: 2 }}
                             onClose={() => setError('')}
                         >
                             {error}
@@ -310,6 +337,14 @@ const GroupView = () => {
                         <Box sx={{ flexGrow: 1 }}>
                             <Typography variant="h4" component="h1" gutterBottom>
                                 {group.name}
+                                {managementMode && (
+                                    <Chip
+                                        label="Managing"
+                                        color="primary"
+                                        size="small"
+                                        sx={{ ml: 2 }}
+                                    />
+                                )}
                             </Typography>
                             {group.description && (
                                 <Typography variant="body1" color="text.secondary">
@@ -326,55 +361,29 @@ const GroupView = () => {
                             />
                         )}
                     </Box>
-
-                    <Grid container spacing={3}>
-                        <Grid item xs={12} sm={4}>
-                            <StatsCard>
-                                <CardContent>
-                                    <PeopleIcon sx={{ fontSize: 40, mb: 1 }} />
-                                    <Typography variant="h4" component="div" fontWeight="bold">
-                                        {group.memberCount}
-                                    </Typography>
-                                    <Typography variant="body1">
-                                        {group.memberCount === 1 ? 'Member' : 'Members'}
-                                    </Typography>
-                                </CardContent>
-                            </StatsCard>
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                            <Card sx={{ textAlign: 'center' }}>
-                                <CardContent>
-                                    <PersonIcon color="primary" sx={{ fontSize: 40, mb: 1 }} />
-                                    <Typography variant="h6" component="div" fontWeight="bold">
-                                        Creator
-                                    </Typography>
-                                    <Typography variant="body1" color="text.secondary">
-                                        {group.creator.username}
-                                    </Typography>
-                                </CardContent>
-                            </Card>
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                            <Card sx={{ textAlign: 'center' }}>
-                                <CardContent>
-                                    <CalendarIcon color="primary" sx={{ fontSize: 40, mb: 1 }} />
-                                    <Typography variant="h6" component="div" fontWeight="bold">
-                                        Created
-                                    </Typography>
-                                    <Typography variant="body1" color="text.secondary">
-                                        {formatDate(group.createdAt)}
-                                    </Typography>
-                                </CardContent>
-                            </Card>
-                        </Grid>
-                    </Grid>
                 </StyledPaper>
+
+                <TaskBoard
+                    groupId={groupId}
+                    currentUser={currentUser}
+                />
 
                 {/* Members Section */}
                 <StyledPaper>
-                    <Typography variant="h5" component="h2" fontWeight={600} sx={{ mb: 3 }}>
-                        Group Members ({group.memberCount})
-                    </Typography>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                        <Typography variant="h5" component="h2" fontWeight={600}>
+                            Group Members ({group.memberCount})
+                        </Typography>
+                        {isCreator() && managementMode && (
+                            <Button
+                                variant="contained"
+                                startIcon={<PersonAddIcon />}
+                                onClick={() => setAddMemberDialog(true)}
+                            >
+                                Add Member
+                            </Button>
+                        )}
+                    </Box>
 
                     <List>
                         {group.members.map((member, index) => (
@@ -403,7 +412,7 @@ const GroupView = () => {
                                         }
                                         secondary={`Member since ${formatDate(group.createdAt)}`}
                                     />
-                                    {isCreator() && member.id !== group.creator.id && showManagement && (
+                                    {isCreator() && managementMode && member.id !== group.creator.id && (
                                         <ListItemSecondaryAction>
                                             <Tooltip title="Remove Member">
                                                 <IconButton
@@ -420,55 +429,13 @@ const GroupView = () => {
                             </React.Fragment>
                         ))}
                     </List>
+
+                    {!isCreator() && (
+                        <Alert severity="info" sx={{ mt: 2 }}>
+                            Only the group creator can manage members.
+                        </Alert>
+                    )}
                 </StyledPaper>
-
-                {/* Management Section - Only visible to creators */}
-                {isCreator() && (
-                    <StyledPaper>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                            <Typography variant="h5" component="h2" fontWeight={600}>
-                                Group Management
-                            </Typography>
-                            <Button
-                                startIcon={showManagement ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                                onClick={() => setShowManagement(!showManagement)}
-                                variant="outlined"
-                            >
-                                {showManagement ? 'Hide' : 'Show'} Management
-                            </Button>
-                        </Box>
-
-                        <Collapse in={showManagement}>
-                            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                                <Button
-                                    variant="contained"
-                                    startIcon={<PersonAddIcon />}
-                                    onClick={() => setAddMemberDialog(true)}
-                                >
-                                    Add Member
-                                </Button>
-                                <Button
-                                    variant="outlined"
-                                    color="error"
-                                    startIcon={<DeleteIcon />}
-                                    onClick={() => setDeleteGroupDialog(true)}
-                                >
-                                    Delete Group
-                                </Button>
-                            </Box>
-                        </Collapse>
-                    </StyledPaper>
-                )}
-
-                {/* Floating Action Button for Creators */}
-                {isCreator() && (
-                    <ManagementFab
-                        onClick={() => setShowManagement(!showManagement)}
-                        aria-label="toggle management"
-                    >
-                        <SettingsIcon />
-                    </ManagementFab>
-                )}
 
                 {/* Add Member Dialog */}
                 <Dialog open={addMemberDialog} onClose={() => setAddMemberDialog(false)} maxWidth="sm" fullWidth>
