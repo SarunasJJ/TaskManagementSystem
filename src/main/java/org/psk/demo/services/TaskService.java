@@ -1,7 +1,5 @@
 package org.psk.demo.services;
 
-import lombok.Getter;
-import lombok.Setter;
 import org.psk.demo.dto.request.TaskRequest;
 import org.psk.demo.dto.request.UpdateTaskRequest;
 import org.psk.demo.dto.response.AuthenticationResponse;
@@ -9,10 +7,11 @@ import org.psk.demo.dto.response.TaskListResponse;
 import org.psk.demo.dto.response.TaskResponse;
 import org.psk.demo.entity.Task;
 import org.psk.demo.entity.TaskStatus;
+import org.psk.demo.interceptors.Audited;
+import org.psk.demo.interceptors.PerformanceMonitored;
 import org.psk.demo.repository.TaskRepository;
 import org.psk.demo.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -21,6 +20,8 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
+@Audited // Class-level audit annotation
+@PerformanceMonitored(slowThresholdMs = 1000)
 public class TaskService {
     @Autowired
     private TaskRepository taskRepository;
@@ -28,6 +29,7 @@ public class TaskService {
     @Autowired
     private UserRepository userRepository;
 
+    @Audited(value = "Create Task", logParameters = true, logReturnValue = true)
     public AuthenticationResponse createTask(TaskRequest taskRequest, Long userId) {
         try{
             if(!userRepository.existsById(userId)) {
@@ -57,6 +59,7 @@ public class TaskService {
         }
     }
 
+    @Audited(value = "Update Task", logParameters = true, logReturnValue = true)
     public AuthenticationResponse updateTask(Long taskId, UpdateTaskRequest request, Long userId) {
         try {
             Optional<Task> optionalTask = taskRepository.findById(taskId);
@@ -65,15 +68,6 @@ public class TaskService {
             }
 
             Task task = optionalTask.get();
-
-            if (request.getVersion() != null && !request.getVersion().equals(task.getVersion())) {
-                return new OptimisticLockResponse(
-                        "Task has been modified by another user. Please refresh and try again.",
-                        task.getVersion(),
-                        convertToTaskResponse(task),
-                        false
-                );
-            }
 
             if (request.getTitle() != null && !request.getTitle().trim().isEmpty()) {
                 task.setTitle(request.getTitle());
@@ -97,26 +91,15 @@ public class TaskService {
                 task.setUserId(request.getAssignedUserId());
             }
 
-            Task savedTask = taskRepository.save(task);
+            taskRepository.save(task);
             return new AuthenticationResponse("Task updated successfully", null, taskId, true);
 
-        } catch (OptimisticLockingFailureException e) {
-            Optional<Task> freshTask = taskRepository.findById(taskId);
-            if (freshTask.isPresent()) {
-                return new OptimisticLockResponse(
-                        "Task has been modified by another user while you were editing. Please review the current version and try again.",
-                        freshTask.get().getVersion(),
-                        convertToTaskResponse(freshTask.get()),
-                        false
-                );
-            } else {
-                return new AuthenticationResponse("Task has been deleted by another user", null, null, false);
-            }
         } catch (Exception e) {
             return new AuthenticationResponse("Failed to update task: " + e.getMessage(), null, null, false);
         }
     }
 
+    @Audited(value = "Delete Task", logParameters = true)
     public AuthenticationResponse deleteTask(Long taskId, Long userId) {
         try {
             Optional<Task> optionalTask = taskRepository.findById(taskId);
@@ -132,37 +115,7 @@ public class TaskService {
         }
     }
 
-    @Setter
-    @Getter
-    public static class OptimisticLockResponse extends AuthenticationResponse {
-        private Long currentVersion;
-        private TaskResponse currentData;
-
-        public OptimisticLockResponse(String message, Long currentVersion, TaskResponse currentData, boolean success) {
-            super(message, null, null, success);
-            this.currentVersion = currentVersion;
-            this.currentData = currentData;
-        }
-    }
-
-    public TaskResponse getTaskById(Long taskId) {
-        Optional<Task> optionalTask = taskRepository.findById(taskId);
-        return optionalTask.map(this::convertToTaskResponse).orElse(null);
-    }
-
-    public TaskListResponse getTasksByGroup(Long groupId) {
-        try {
-            List<Task> tasks = taskRepository.findByGroupIdOrderByDeadlineAsc(groupId);
-            List<TaskResponse> taskResponses = tasks.stream()
-                    .map(this::convertToTaskResponse)
-                    .collect(Collectors.toList());
-
-            return new TaskListResponse("Tasks retrieved successfully", taskResponses, taskResponses.size(), true);
-        } catch (Exception e) {
-            return new TaskListResponse("Failed to retrieve tasks: " + e.getMessage(), null, 0, false);
-        }
-    }
-
+    @Audited(value = "Assign Task", logParameters = true)
     public AuthenticationResponse assignTask(Long taskId, Long assignedUserId, Long userId) {
         try {
             Optional<Task> optionalTask = taskRepository.findById(taskId);
@@ -184,6 +137,27 @@ public class TaskService {
         }
     }
 
+    @PerformanceMonitored(slowThresholdMs = 500) // Lower threshold for read operations
+    public TaskResponse getTaskById(Long taskId) {
+        Optional<Task> optionalTask = taskRepository.findById(taskId);
+        return optionalTask.map(this::convertToTaskResponse).orElse(null);
+    }
+
+    @PerformanceMonitored(slowThresholdMs = 800)
+    public TaskListResponse getTasksByGroup(Long groupId) {
+        try {
+            List<Task> tasks = taskRepository.findByGroupIdOrderByDeadlineAsc(groupId);
+            List<TaskResponse> taskResponses = tasks.stream()
+                    .map(this::convertToTaskResponse)
+                    .collect(Collectors.toList());
+
+            return new TaskListResponse("Tasks retrieved successfully", taskResponses, taskResponses.size(), true);
+        } catch (Exception e) {
+            return new TaskListResponse("Failed to retrieve tasks: " + e.getMessage(), null, 0, false);
+        }
+    }
+
+    @PerformanceMonitored(slowThresholdMs = 600)
     public TaskListResponse getTasksByGroupAndStatus(Long groupId, TaskStatus status) {
         try {
             List<Task> tasks = taskRepository.findByGroupIdAndStatus(groupId, status);
@@ -197,11 +171,9 @@ public class TaskService {
         }
     }
 
-
     private TaskResponse convertToTaskResponse(Task task) {
         TaskResponse response = new TaskResponse();
         response.setId(task.getId());
-        response.setVersion(task.getVersion());
         response.setTitle(task.getTitle());
         response.setDescription(task.getDescription());
         response.setDeadline(task.getDeadline());
@@ -222,5 +194,4 @@ public class TaskService {
 
         return response;
     }
-
 }

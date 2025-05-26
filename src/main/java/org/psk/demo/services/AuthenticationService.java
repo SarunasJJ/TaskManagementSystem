@@ -4,6 +4,8 @@ import org.psk.demo.dto.request.LoginRequest;
 import org.psk.demo.dto.request.SignUpRequest;
 import org.psk.demo.dto.response.AuthenticationResponse;
 import org.psk.demo.entity.User;
+import org.psk.demo.interceptors.Audited;
+import org.psk.demo.interceptors.PerformanceMonitored;
 import org.psk.demo.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -12,6 +14,8 @@ import org.springframework.stereotype.Service;
 import java.util.Optional;
 
 @Service
+@Audited // Class-level audit annotation
+@PerformanceMonitored(slowThresholdMs = 2000) // Monitor performance for auth operations
 public class AuthenticationService {
 
     @Autowired
@@ -20,6 +24,7 @@ public class AuthenticationService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Audited(value = "User Registration", logParameters = false, logReturnValue = false)
     public AuthenticationResponse signUp(SignUpRequest signUpRequest) {
         if(!signUpRequest.getPassword().equals(signUpRequest.getConfirmPassword())) {
             return new AuthenticationResponse("Passwords do not match!", null, null, false);
@@ -39,6 +44,7 @@ public class AuthenticationService {
         }
     }
 
+    @Audited(value = "User Login", logParameters = false, logReturnValue = false)
     public AuthenticationResponse login(LoginRequest loginRequest) {
         Optional<User> user = userRepository.findByUsername(loginRequest.getUsername());
         if(user.isEmpty()) {
