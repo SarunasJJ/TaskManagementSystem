@@ -165,20 +165,6 @@ class TaskService {
         }
     }
 
-    handleOptimisticLockResult(result, onConflict, onSuccess, onError) {
-        if (result.success) {
-            onSuccess(result);
-        } else if (result.isOptimisticLockConflict) {
-            onConflict({
-                message: result.error,
-                currentVersion: result.currentVersion,
-                currentData: result.currentData
-            });
-        } else {
-            onError(result.error);
-        }
-    }
-
     async assignTask(taskId, assignedUserId, userId) {
         try {
             let url;
