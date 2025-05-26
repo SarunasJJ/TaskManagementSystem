@@ -1,5 +1,7 @@
 package org.psk.demo.services;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.psk.demo.dto.request.TaskRequest;
 import org.psk.demo.dto.request.UpdateTaskRequest;
 import org.psk.demo.dto.response.AuthenticationResponse;
@@ -168,6 +170,19 @@ public class TaskService {
             return new TaskListResponse("Tasks retrieved successfully", taskResponses, taskResponses.size(), true);
         } catch (Exception e) {
             return new TaskListResponse("Failed to retrieve tasks: " + e.getMessage(), null, 0, false);
+        }
+    }
+
+    @Setter
+    @Getter
+    public static class OptimisticLockResponse extends AuthenticationResponse {
+        private Long currentVersion;
+        private TaskResponse currentData;
+
+        public OptimisticLockResponse(String message, Long currentVersion, TaskResponse currentData, boolean success) {
+            super(message, null, null, success);
+            this.currentVersion = currentVersion;
+            this.currentData = currentData;
         }
     }
 

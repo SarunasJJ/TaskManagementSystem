@@ -1,44 +1,40 @@
 package org.psk.demo.interceptors;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.interceptor.AroundInvoke;
 import jakarta.interceptor.Interceptor;
 import jakarta.interceptor.InvocationContext;
-import org.psk.demo.entity.AuditLog;
+import org.psk.demo.config.SpringContextHolder;
 import org.psk.demo.services.AuditService;
 import org.psk.demo.services.UserContextService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.annotation.Order;
-import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Method;
-import java.util.Arrays;
 
 @Audited
 @Interceptor
-@Component
-@Order(1)
 public class AuditInterceptor {
 
     private static final Logger logger = LoggerFactory.getLogger(AuditInterceptor.class);
-
-    @Autowired
-    private AuditService auditService;
-
-    @Autowired
-    private UserContextService userContextService;
-
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @AroundInvoke
     public Object auditMethodExecution(InvocationContext context) throws Exception {
         long startTime = System.currentTimeMillis();
         Method method = context.getMethod();
 
+        // Get Spring beans
+        AuditService auditService = SpringContextHolder.getBean(AuditService.class);
+        UserContextService userContextService = SpringContextHolder.getBean(UserContextService.class);
+
+        if (auditService == null || userContextService == null) {
+            logger.warn("Could not get Spring beans for auditing, proceeding without audit");
+            return context.proceed();
+        }
+
+        // Extract audit configuration
         Audited auditedAnnotation = getAuditedAnnotation(method, context.getTarget().getClass());
 
+        // Gather context information
         Long userId = userContextService.getCurrentUserId();
         String username = userContextService.getCurrentUsername();
         String userRoles = userContextService.getCurrentUserRoles();
@@ -47,69 +43,54 @@ public class AuditInterceptor {
         String ipAddress = userContextService.getClientIpAddress();
         String sessionId = userContextService.getSessionId();
 
+        // Build operation description
         String operationDescription = buildOperationDescription(auditedAnnotation, className, methodName);
 
-        String methodParameters = null;
-        if (auditedAnnotation != null && auditedAnnotation.logParameters()) {
-            methodParameters = serializeParameters(context.getParameters());
-        }
-
-        AuditLog.OperationResult result = null;
-        String returnValue = null;
+        String result = null;
         String errorMessage = null;
         Object methodResult = null;
 
         try {
+            // Execute the actual method
             methodResult = context.proceed();
-            result = AuditLog.OperationResult.SUCCESS;
-
-            if (auditedAnnotation != null && auditedAnnotation.logReturnValue() && methodResult != null) {
-                returnValue = serializeReturnValue(methodResult);
-            }
+            result = "SUCCESS";
 
         } catch (Exception e) {
-            result = AuditLog.OperationResult.FAILURE;
+            result = "FAILURE";
             errorMessage = e.getClass().getSimpleName() + ": " + e.getMessage();
             logger.error("Audited method {} failed: {}", methodName, e.getMessage());
-            throw e;
+            throw e; // Re-throw the exception
 
         } finally {
             long executionTime = System.currentTimeMillis() - startTime;
 
-            try {
-                AuditLog auditLog = auditService.createAuditLog(
-                        userId,
-                        username,
-                        userRoles,
-                        className,
-                        methodName,
-                        operationDescription,
-                        methodParameters,
-                        returnValue,
-                        executionTime,
-                        result,
-                        errorMessage,
-                        ipAddress,
-                        sessionId
-                );
-
-                auditService.saveAuditLog(auditLog);
-
-            } catch (Exception auditException) {
-                logger.error("Failed to create audit log for {}.{}: {}",
-                        className, methodName, auditException.getMessage());
-            }
+            // Log audit information asynchronously
+            auditService.logAuditEvent(
+                    userId,
+                    username,
+                    userRoles,
+                    className,
+                    methodName,
+                    operationDescription,
+                    executionTime,
+                    result,
+                    errorMessage,
+                    ipAddress,
+                    sessionId
+            );
         }
 
         return methodResult;
     }
 
     private Audited getAuditedAnnotation(Method method, Class<?> targetClass) {
+        // First check method-level annotation
         Audited methodAnnotation = method.getAnnotation(Audited.class);
         if (methodAnnotation != null) {
             return methodAnnotation;
         }
 
+        // Then check class-level annotation
         return targetClass.getAnnotation(Audited.class);
     }
 
@@ -118,6 +99,7 @@ public class AuditInterceptor {
             return auditedAnnotation.value();
         }
 
+        // Generate description based on method name patterns
         return generateDescriptionFromMethodName(className, methodName);
     }
 
@@ -144,53 +126,6 @@ public class AuditInterceptor {
             return className + " Operation";
         }
     }
-
-    private String serializeParameters(Object[] parameters) {
-        if (parameters == null || parameters.length == 0) {
-            return "[]";
-        }
-
-        try {
-            Object[] safeParams = Arrays.stream(parameters)
-                    .map(this::sanitizeParameter)
-                    .toArray();
-
-            return objectMapper.writeValueAsString(safeParams);
-        } catch (Exception e) {
-            return "[Serialization failed: " + e.getMessage() + "]";
-        }
-    }
-
-    private String serializeReturnValue(Object returnValue) {
-        try {
-            Object safeReturnValue = sanitizeParameter(returnValue);
-            String serialized = objectMapper.writeValueAsString(safeReturnValue);
-
-            if (serialized.length() > 500) {
-                return serialized.substring(0, 500) + "... [truncated]";
-            }
-
-            return serialized;
-        } catch (Exception e) {
-            return "[Serialization failed: " + e.getMessage() + "]";
-        }
-    }
-
-    private Object sanitizeParameter(Object param) {
-        if (param == null) {
-            return null;
-        }
-
-        String paramString = param.toString();
-
-        if (paramString.toLowerCase().contains("password")) {
-            return "[HIDDEN]";
-        }
-
-        if (paramString.length() > 200) {
-            return paramString.substring(0, 200) + "... [truncated]";
-        }
-
-        return param;
-    }
 }
+
+// Keep SpringContextHolder.java as it was - needed to get Spring beans

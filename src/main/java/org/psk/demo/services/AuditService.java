@@ -1,103 +1,70 @@
 package org.psk.demo.services;
 
-import org.psk.demo.entity.AuditLog;
-import org.psk.demo.repository.AuditLogRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 @Service
 public class AuditService {
 
+    private static final Logger auditLogger = LoggerFactory.getLogger("AUDIT");
     private static final Logger logger = LoggerFactory.getLogger(AuditService.class);
-
-    @Autowired
-    private AuditLogRepository auditLogRepository;
+    private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
 
     @Value("${app.audit.enabled:true}")
     private boolean auditEnabled;
 
-    @Value("${app.audit.log-to-db:true}")
-    private boolean logToDatabase;
-
-    @Value("${app.audit.log-to-file:true}")
-    private boolean logToFile;
-
     @Async
-    public void saveAuditLog(AuditLog auditLog) {
-        if (!auditEnabled) {
-            return;
-        }
-
-        try {
-            if (logToFile) {
-                logToFile(auditLog);
-            }
-
-            if (logToDatabase) {
-                auditLogRepository.save(auditLog);
-            }
-
-        } catch (Exception e) {
-            logger.error("Failed to save audit log: {}", e.getMessage(), e);
-        }
-    }
-
-    public AuditLog createAuditLog(
+    public void logAuditEvent(
             Long userId,
             String username,
             String userRoles,
             String className,
             String methodName,
             String operationDescription,
-            String methodParameters,
-            String returnValue,
             Long executionTimeMs,
-            AuditLog.OperationResult result,
+            String result,
             String errorMessage,
             String ipAddress,
             String sessionId) {
 
-        AuditLog auditLog = new AuditLog();
-        auditLog.setUserId(userId);
-        auditLog.setUsername(username);
-        auditLog.setUserRoles(userRoles);
-        auditLog.setClassName(className);
-        auditLog.setMethodName(methodName);
-        auditLog.setOperationDescription(operationDescription);
-        auditLog.setMethodParameters(methodParameters);
-        auditLog.setReturnValue(returnValue);
-        auditLog.setExecutionTimeMs(executionTimeMs);
-        auditLog.setOperationResult(result);
-        auditLog.setErrorMessage(errorMessage);
-        auditLog.setIpAddress(ipAddress);
-        auditLog.setSessionId(sessionId);
-        auditLog.setTimestamp(LocalDateTime.now());
+        if (!auditEnabled) {
+            return;
+        }
 
-        return auditLog;
-    }
+        try {
+            String timestamp = LocalDateTime.now().format(TIMESTAMP_FORMATTER);
 
-    private void logToFile(AuditLog auditLog) {
-        logger.info("AUDIT: [{}] User: {}({}) | Operation: {}.{} | Result: {} | Time: {}ms | Description: {} | IP: {} | Session: {}",
-                auditLog.getTimestamp(),
-                auditLog.getUsername(),
-                auditLog.getUserId(),
-                auditLog.getClassName(),
-                auditLog.getMethodName(),
-                auditLog.getOperationResult(),
-                auditLog.getExecutionTimeMs(),
-                auditLog.getOperationDescription(),
-                auditLog.getIpAddress(),
-                auditLog.getSessionId()
-        );
+            StringBuilder auditLog = new StringBuilder();
+            auditLog.append("AUDIT: [").append(timestamp).append("] ");
+            auditLog.append("User: ").append(username != null ? username : "SYSTEM").append("(").append(userId != null ? userId : "N/A").append(") ");
+            auditLog.append("| Operation: ").append(className).append(".").append(methodName);
+            auditLog.append(" | Description: ").append(operationDescription);
+            auditLog.append(" | Result: ").append(result);
+            auditLog.append(" | Time: ").append(executionTimeMs).append("ms");
 
-        if (auditLog.getErrorMessage() != null) {
-            logger.warn("AUDIT_ERROR: [{}] {}", auditLog.getTimestamp(), auditLog.getErrorMessage());
+            if (ipAddress != null) {
+                auditLog.append(" | IP: ").append(ipAddress);
+            }
+
+            if (sessionId != null) {
+                auditLog.append(" | Session: ").append(sessionId);
+            }
+
+            if (errorMessage != null) {
+                auditLog.append(" | Error: ").append(errorMessage);
+            }
+
+            // Log to audit file
+            auditLogger.info(auditLog.toString());
+
+        } catch (Exception e) {
+            logger.error("Failed to log audit event: {}", e.getMessage());
         }
     }
 }

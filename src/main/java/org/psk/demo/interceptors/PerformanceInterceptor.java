@@ -5,15 +5,11 @@ import jakarta.interceptor.Interceptor;
 import jakarta.interceptor.InvocationContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.annotation.Order;
-import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Method;
 
 @PerformanceMonitored
 @Interceptor
-@Component
-@Order(2)
 public class PerformanceInterceptor {
 
     private static final Logger logger = LoggerFactory.getLogger(PerformanceInterceptor.class);
@@ -26,6 +22,7 @@ public class PerformanceInterceptor {
         String className = context.getTarget().getClass().getSimpleName();
         String methodName = method.getName();
 
+        // Get performance monitoring configuration
         PerformanceMonitored performanceConfig = getPerformanceConfig(method, context.getTarget().getClass());
 
         long slowThreshold = performanceConfig != null ?
@@ -63,11 +60,13 @@ public class PerformanceInterceptor {
     }
 
     private PerformanceMonitored getPerformanceConfig(Method method, Class<?> targetClass) {
+        // First check method-level annotation
         PerformanceMonitored methodAnnotation = method.getAnnotation(PerformanceMonitored.class);
         if (methodAnnotation != null) {
             return methodAnnotation;
         }
 
+        // Then check class-level annotation
         return targetClass.getAnnotation(PerformanceMonitored.class);
     }
 
@@ -83,6 +82,7 @@ public class PerformanceInterceptor {
         String operation = className + "." + methodName;
         String status = success ? "SUCCESS" : "FAILURE";
 
+        // Always log slow operations
         if (executionTime > slowThreshold) {
             performanceLogger.warn("SLOW_OPERATION: {} | Status: {} | ExecutionTime: {}ms | Threshold: {}ms",
                     operation, status, executionTime, slowThreshold);
@@ -93,16 +93,19 @@ public class PerformanceInterceptor {
             }
         }
 
+        // Log all operations if configured to do so
         if (alwaysLog) {
             performanceLogger.info("PERFORMANCE: {} | Status: {} | ExecutionTime: {}ms",
                     operation, status, executionTime);
         }
 
+        // Log very fast operations (might indicate caching or early returns)
         if (executionTime < 5 && success) {
             performanceLogger.debug("FAST_OPERATION: {} | ExecutionTime: {}ms",
                     operation, executionTime);
         }
 
+        // Log operations with moderate execution time for analysis
         if (executionTime > 100 && executionTime <= slowThreshold) {
             performanceLogger.debug("MODERATE_OPERATION: {} | Status: {} | ExecutionTime: {}ms",
                     operation, status, executionTime);

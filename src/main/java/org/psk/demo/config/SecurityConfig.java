@@ -35,7 +35,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/groups/**").permitAll()
                         .requestMatchers("/api/tasks/**").permitAll()
                         .requestMatchers("/api/test/**").permitAll()
-                        .requestMatchers("/api/audit/**").permitAll() // Allow audit endpoints
+                        // Removed audit endpoints - no longer needed
                         .anyRequest().authenticated()
                 );
 
