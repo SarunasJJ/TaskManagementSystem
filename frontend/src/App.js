@@ -7,6 +7,7 @@ import Homepage from "./components/Homepage";
 import GroupsList from "./components/GroupsList";
 import CreateGroup from "./components/CreateGroup";
 import GroupView from "./components/GroupView";
+import ManageGroup from "./components/ManageGroup";
 import MuiThemeProvider from "./components/MuiThemeProvider";
 
 const ProtectedRoute = ({children}) => {
@@ -34,6 +35,7 @@ function App() {
                         <Route path="/groups" element={<ProtectedRoute><GroupsList/></ProtectedRoute>} />
                         <Route path="/groups/create" element={<ProtectedRoute><CreateGroup/></ProtectedRoute>} />
                         <Route path="/groups/:groupId" element={<ProtectedRoute><GroupView/></ProtectedRoute>} />
+                        <Route path="/groups/:groupId/manage" element={<ProtectedRoute><ManageGroup/></ProtectedRoute>} />
 
                         <Route path="*" element={<Navigate to="/login" />} />
                     </Routes>
