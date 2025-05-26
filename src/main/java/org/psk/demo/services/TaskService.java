@@ -1,5 +1,7 @@
 package org.psk.demo.services;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.psk.demo.dto.request.TaskRequest;
 import org.psk.demo.dto.request.UpdateTaskRequest;
 import org.psk.demo.dto.response.AuthenticationResponse;
@@ -10,6 +12,7 @@ import org.psk.demo.entity.TaskStatus;
 import org.psk.demo.repository.TaskRepository;
 import org.psk.demo.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -63,6 +66,15 @@ public class TaskService {
 
             Task task = optionalTask.get();
 
+            if (request.getVersion() != null && !request.getVersion().equals(task.getVersion())) {
+                return new OptimisticLockResponse(
+                        "Task has been modified by another user. Please refresh and try again.",
+                        task.getVersion(),
+                        convertToTaskResponse(task),
+                        false
+                );
+            }
+
             if (request.getTitle() != null && !request.getTitle().trim().isEmpty()) {
                 task.setTitle(request.getTitle());
             }
@@ -85,9 +97,21 @@ public class TaskService {
                 task.setUserId(request.getAssignedUserId());
             }
 
-            taskRepository.save(task);
+            Task savedTask = taskRepository.save(task);
             return new AuthenticationResponse("Task updated successfully", null, taskId, true);
 
+        } catch (OptimisticLockingFailureException e) {
+            Optional<Task> freshTask = taskRepository.findById(taskId);
+            if (freshTask.isPresent()) {
+                return new OptimisticLockResponse(
+                        "Task has been modified by another user while you were editing. Please review the current version and try again.",
+                        freshTask.get().getVersion(),
+                        convertToTaskResponse(freshTask.get()),
+                        false
+                );
+            } else {
+                return new AuthenticationResponse("Task has been deleted by another user", null, null, false);
+            }
         } catch (Exception e) {
             return new AuthenticationResponse("Failed to update task: " + e.getMessage(), null, null, false);
         }
@@ -105,6 +129,19 @@ public class TaskService {
 
         } catch (Exception e) {
             return new AuthenticationResponse("Failed to delete task: " + e.getMessage(), null, null, false);
+        }
+    }
+
+    @Setter
+    @Getter
+    public static class OptimisticLockResponse extends AuthenticationResponse {
+        private Long currentVersion;
+        private TaskResponse currentData;
+
+        public OptimisticLockResponse(String message, Long currentVersion, TaskResponse currentData, boolean success) {
+            super(message, null, null, success);
+            this.currentVersion = currentVersion;
+            this.currentData = currentData;
         }
     }
 
@@ -164,6 +201,7 @@ public class TaskService {
     private TaskResponse convertToTaskResponse(Task task) {
         TaskResponse response = new TaskResponse();
         response.setId(task.getId());
+        response.setVersion(task.getVersion());
         response.setTitle(task.getTitle());
         response.setDescription(task.getDescription());
         response.setDeadline(task.getDeadline());

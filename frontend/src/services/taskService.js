@@ -115,14 +115,24 @@ class TaskService {
             if (response.ok && data.success) {
                 return { success: true, data };
             } else {
-                return { success: false, error: data.message || 'Failed to update task' };
+                if (data.currentVersion && data.currentData) {
+                    return {
+                        success: false,
+                        error: data.message,
+                        isOptimisticLockConflict: true,
+                        currentVersion: data.currentVersion,
+                        currentData: data.currentData
+                    };
+                } else {
+                    return { success: false, error: data.message || 'Failed to update task' };
+                }
             }
         } catch (error) {
             return { success: false, error: 'Network error. Please try again.' };
         }
     }
 
-    async updateTaskStatus(taskId, status, userId) {
+    async updateTaskStatus(taskId, status, userId, version) {
         try {
             const response = await fetch(`${API_BASE_URL}/tasks/${taskId}/status/${status}`, {
                 method: 'PUT',
@@ -130,6 +140,7 @@ class TaskService {
                     'Content-Type': 'application/json',
                     'User-Id': userId.toString()
                 },
+                body: JSON.stringify({ version }),
             });
 
             const data = await response.json();
@@ -137,10 +148,34 @@ class TaskService {
             if (response.ok && data.success) {
                 return { success: true, data };
             } else {
-                return { success: false, error: data.message || 'Failed to update task status' };
+                if (data.currentVersion && data.currentData) {
+                    return {
+                        success: false,
+                        error: data.message,
+                        isOptimisticLockConflict: true,
+                        currentVersion: data.currentVersion,
+                        currentData: data.currentData
+                    };
+                } else {
+                    return { success: false, error: data.message || 'Failed to update task status' };
+                }
             }
         } catch (error) {
             return { success: false, error: 'Network error. Please try again.' };
+        }
+    }
+
+    handleOptimisticLockResult(result, onConflict, onSuccess, onError) {
+        if (result.success) {
+            onSuccess(result);
+        } else if (result.isOptimisticLockConflict) {
+            onConflict({
+                message: result.error,
+                currentVersion: result.currentVersion,
+                currentData: result.currentData
+            });
+        } else {
+            onError(result.error);
         }
     }
 
