@@ -2,20 +2,11 @@ import React, { useState } from 'react';
 import {
     Card,
     CardContent,
-    TextField,
-    Button,
     Typography,
-    Alert,
+    Button,
     Box,
-    CircularProgress,
-    InputAdornment,
     Divider,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
-    Chip,
-    Avatar
+    InputAdornment
 } from '@mui/material';
 import {
     Add as AddIcon,
@@ -23,10 +14,15 @@ import {
     Description as DescriptionIcon,
     Schedule as ScheduleIcon,
     Save as SaveIcon,
-    Cancel as CancelIcon,
-    Person as PersonIcon
+    Cancel as CancelIcon
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
+import { useApiRequest } from '../hooks/useApiRequest';
+import { useFormValidation } from '../hooks/useFormValidation';
+import { validationRules } from '../utils/validationRules';
+import FormField from './common/FormField';
+import StatusMessages from './common/StatusMessages';
+import MemberSelect from './task/MemberSelect';
 
 const StyledCard = styled(Card)(({ theme }) => ({
     maxWidth: 800,
@@ -51,9 +47,7 @@ const ActionBox = styled(Box)(({ theme }) => ({
     marginTop: theme.spacing(3),
     [theme.breakpoints.down('sm')]: {
         flexDirection: 'column-reverse',
-        '& > *': {
-            width: '100%',
-        },
+        '& > *': { width: '100%' },
     },
 }));
 
@@ -64,6 +58,13 @@ const CreateTask = ({
                         groupId,
                         groupMembers = []
                     }) => {
+    const { loading, error, success, makeRequest, clearMessages } = useApiRequest();
+    const { errors, validateForm, clearError } = useFormValidation({
+        title: validationRules.taskTitle,
+        description: validationRules.taskDescription,
+        deadline: validationRules.deadline
+    });
+
     const [formData, setFormData] = useState({
         title: '',
         description: '',
@@ -71,97 +72,56 @@ const CreateTask = ({
         assignedUserId: ''
     });
 
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
-
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({
             ...prev,
             [name]: value === '' ? (name === 'assignedUserId' ? '' : value) : value
         }));
+        clearError(name);
+        clearMessages();
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setLoading(true);
-        setError('');
-        setSuccess('');
 
-        if (!formData.title.trim()) {
-            setError('Title is required');
-            setLoading(false);
-            return;
-        }
-
-        if (!formData.deadline) {
-            setError('Deadline is required');
-            setLoading(false);
-            return;
-        }
-
-        // Check if deadline is in the future
+        // Additional validation for deadline
         const deadlineDate = new Date(formData.deadline);
         if (deadlineDate <= new Date()) {
-            setError('Deadline must be in the future');
-            setLoading(false);
+            // Handle deadline validation error
             return;
         }
 
-        try {
-            const taskData = {
-                title: formData.title.trim(),
-                description: formData.description.trim(),
-                deadline: new Date(formData.deadline).toISOString(),
-                groupId: groupId,
-                userId: formData.assignedUserId || null
-            };
+        if (!validateForm(formData)) {
+            return;
+        }
 
-            const response = await fetch('http://localhost:8080/api/tasks', {
+        const taskData = {
+            title: formData.title.trim(),
+            description: formData.description.trim(),
+            deadline: new Date(formData.deadline).toISOString(),
+            groupId: groupId,
+            userId: formData.assignedUserId || null
+        };
+
+        const result = await makeRequest(
+            () => fetch('http://localhost:8080/api/tasks', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'User-Id': currentUserId.toString()
                 },
                 body: JSON.stringify(taskData)
-            });
+            }).then(res => res.json()),
+            'Task created successfully! 🎉'
+        );
 
-            const data = await response.json();
-
-            if (response.ok && data.success) {
-                setSuccess('Task created successfully! 🎉');
-                if (onTaskCreated) {
-                    onTaskCreated(data);
-                }
-            } else {
-                setError(data.message || 'Failed to create task');
-            }
-        } catch (err) {
-            setError('Network error. Please try again.');
-            console.error('Error creating task:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleCancel = () => {
-        if (onCancel) {
-            onCancel();
+        if (result && result.success && onTaskCreated) {
+            onTaskCreated(result);
         }
     };
 
     const minDateTime = new Date().toISOString().slice(0, 16);
-
-    const getAssignedMember = () => {
-        return groupMembers.find(member => member.id.toString() === formData.assignedUserId);
-    };
-
-    const getAvatarColor = (username) => {
-        const colors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50'];
-        const index = username.charCodeAt(0) % colors.length;
-        return colors[index];
-    };
 
     return (
         <StyledCard>
@@ -176,149 +136,67 @@ const CreateTask = ({
             </HeaderBox>
 
             <CardContent sx={{ p: 3 }}>
-                {error && (
-                    <Alert
-                        severity="error"
-                        onClose={() => setError('')}
-                        sx={{ mb: 2 }}
-                    >
-                        {error}
-                    </Alert>
-                )}
-
-                {success && (
-                    <Alert
-                        severity="success"
-                        onClose={() => setSuccess('')}
-                        sx={{ mb: 2 }}
-                    >
-                        {success}
-                    </Alert>
-                )}
+                <StatusMessages
+                    error={error}
+                    success={success}
+                    onClearError={clearMessages}
+                    onClearSuccess={clearMessages}
+                />
 
                 <Box component="form" onSubmit={handleSubmit}>
-                    <TextField
-                        fullWidth
-                        required
-                        label="Task Title"
-                        name="title"
-                        value={formData.title}
-                        onChange={handleInputChange}
-                        placeholder="Enter task title"
-                        inputProps={{ maxLength: 50 }}
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <TitleIcon color="action" />
-                                </InputAdornment>
-                            ),
-                        }}
-                        sx={{ mb: 3 }}
-                        helperText={`${formData.title.length}/50 characters`}
-                    />
-
-                    <TextField
-                        fullWidth
-                        multiline
-                        rows={4}
-                        label="Description"
-                        name="description"
-                        value={formData.description}
-                        onChange={handleInputChange}
-                        placeholder="Enter task description (optional)"
-                        inputProps={{ maxLength: 1000 }}
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start" sx={{ alignSelf: 'flex-start', mt: 2 }}>
-                                    <DescriptionIcon color="action" />
-                                </InputAdornment>
-                            ),
-                        }}
-                        sx={{ mb: 3 }}
-                        helperText={`${formData.description.length}/1000 characters`}
-                    />
-
-                    <TextField
-                        fullWidth
-                        required
-                        type="datetime-local"
-                        label="Deadline"
-                        name="deadline"
-                        value={formData.deadline}
-                        onChange={handleInputChange}
-                        InputLabelProps={{ shrink: true }}
-                        inputProps={{ min: minDateTime }}
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <ScheduleIcon color="action" />
-                                </InputAdornment>
-                            ),
-                        }}
-                        sx={{ mb: 3 }}
-                    />
-
-                    <FormControl fullWidth sx={{ mb: 4 }}>
-                        <InputLabel>Assign to Member (Optional)</InputLabel>
-                        <Select
-                            name="assignedUserId"
-                            value={formData.assignedUserId}
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <FormField
+                            name="title"
+                            label="Task Title"
+                            value={formData.title}
                             onChange={handleInputChange}
-                            label="Assign to Member (Optional)"
-                            startAdornment={
-                                <InputAdornment position="start">
-                                    <PersonIcon color="action" />
-                                </InputAdornment>
-                            }
-                            renderValue={(selected) => {
-                                if (!selected) return '';
-                                const member = getAssignedMember();
-                                return member ? (
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <Avatar
-                                            sx={{
-                                                bgcolor: getAvatarColor(member.username),
-                                                width: 24,
-                                                height: 24,
-                                                fontSize: '0.8rem'
-                                            }}
-                                        >
-                                            {member.username.charAt(0).toUpperCase()}
-                                        </Avatar>
-                                        {member.username}
-                                    </Box>
-                                ) : '';
-                            }}
-                        >
-                            <MenuItem value="">
-                                <em>No assignment</em>
-                            </MenuItem>
-                            {groupMembers.map((member) => (
-                                <MenuItem key={member.id} value={member.id.toString()}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                        <Avatar
-                                            sx={{
-                                                bgcolor: getAvatarColor(member.username),
-                                                width: 32,
-                                                height: 32,
-                                                fontSize: '0.9rem'
-                                            }}
-                                        >
-                                            {member.username.charAt(0).toUpperCase()}
-                                        </Avatar>
-                                        <Typography>{member.username}</Typography>
-                                    </Box>
-                                </MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
+                            placeholder="Enter task title"
+                            required
+                            maxLength={50}
+                            startIcon={<TitleIcon color="action" />}
+                        />
 
-                    <Divider sx={{ mb: 3 }} />
+                        <FormField
+                            name="description"
+                            label="Description"
+                            value={formData.description}
+                            onChange={handleInputChange}
+                            placeholder="Enter task description (optional)"
+                            multiline
+                            rows={4}
+                            maxLength={1000}
+                            startIcon={<DescriptionIcon color="action" />}
+                        />
+
+                        <FormField
+                            name="deadline"
+                            label="Deadline"
+                            type="datetime-local"
+                            value={formData.deadline}
+                            onChange={handleInputChange}
+                            required
+                            InputLabelProps={{ shrink: true }}
+                            inputProps={{ min: minDateTime }}
+                            startIcon={<ScheduleIcon color="action" />}
+                        />
+
+                        <MemberSelect
+                            members={groupMembers}
+                            value={formData.assignedUserId}
+                            onChange={(e) => handleInputChange({
+                                target: { name: 'assignedUserId', value: e.target.value }
+                            })}
+                            label="Assign to Member (Optional)"
+                            fullWidth
+                        />
+                    </Box>
+
+                    <Divider sx={{ my: 3 }} />
 
                     <ActionBox>
                         <Button
                             variant="outlined"
-                            onClick={handleCancel}
+                            onClick={onCancel}
                             disabled={loading}
                             size="large"
                             startIcon={<CancelIcon />}
@@ -330,7 +208,7 @@ const CreateTask = ({
                             variant="contained"
                             size="large"
                             disabled={loading}
-                            startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />}
+                            startIcon={<SaveIcon />}
                             sx={{
                                 py: 1.5,
                                 background: 'linear-gradient(135deg, #667eea, #764ba2)',

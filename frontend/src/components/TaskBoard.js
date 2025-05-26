@@ -4,33 +4,27 @@ import {
     Typography,
     Box,
     Button,
-    Card,
-    CardContent,
     Grid,
-    CircularProgress,
-    Badge,
-    Chip,
-    Avatar,
-    Tooltip,
-    IconButton,
     Menu,
     MenuItem,
     Divider,
     Dialog,
-    DialogContent,
-    Alert
+    DialogContent
 } from '@mui/material';
 import {
     Add as AddIcon,
     Assignment as TaskIcon,
-    PlayArrow as InProgressIcon,
-    CheckCircle as DoneIcon,
     RadioButtonUnchecked as TodoIcon,
-    MoreVert as MoreVertIcon
+    Autorenew as InProgressIcon,
+    CheckCircle as DoneIcon
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
+import { useApiRequest } from '../hooks/useApiRequest';
+import LoadingState from './common/LoadingState';
+import StatusMessages from './common/StatusMessages';
 import TaskView from './TaskView';
+import TaskTableColumn from "./task/TaskTableColumn";
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
     padding: theme.spacing(3),
@@ -39,38 +33,29 @@ const StyledPaper = styled(Paper)(({ theme }) => ({
     boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
 }));
 
-const TaskCard = styled(Card)(({ theme }) => ({
-    marginBottom: theme.spacing(1),
-    cursor: 'pointer',
-    transition: 'all 0.2s ease-in-out',
-    '&:hover': {
-        transform: 'translateY(-2px)',
-        boxShadow: theme.shadows[4],
+const columnConfig = {
+    'TODO': {
+        title: 'To Do',
+        icon: TodoIcon,
+        headerColor: 'info.light'
     },
-}));
-
-const KanbanColumn = styled(Paper)(({ theme }) => ({
-    padding: theme.spacing(2),
-    minHeight: 400,
-    backgroundColor: theme.palette.grey[50],
-    borderRadius: theme.spacing(2),
-}));
-
-const ColumnHeader = styled(Box)(({ theme }) => ({
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: theme.spacing(2),
-    padding: theme.spacing(1),
-    borderRadius: theme.spacing(1),
-}));
+    'IN_PROGRESS': {
+        title: 'In Progress',
+        icon: InProgressIcon,
+        headerColor: 'warning.light'
+    },
+    'DONE': {
+        title: 'Done',
+        icon: DoneIcon,
+        headerColor: 'success.light'
+    }
+};
 
 const TaskBoard = ({ groupId, currentUser }) => {
     const navigate = useNavigate();
+    const { loading, error, success, makeRequest, setSuccess, clearMessages } = useApiRequest();
+
     const [tasks, setTasks] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
     const [selectedTask, setSelectedTask] = useState(null);
     const [taskViewDialog, setTaskViewDialog] = useState(false);
     const [taskMenuAnchor, setTaskMenuAnchor] = useState(null);
@@ -83,35 +68,35 @@ const TaskBoard = ({ groupId, currentUser }) => {
     }, [groupId, currentUser]);
 
     const fetchTasks = async () => {
-        if (!groupId) return;
+        const result = await makeRequest(
+            () => fetch(`http://localhost:8080/api/tasks/group/${groupId}`, {
+                headers: { 'User-Id': currentUser?.id?.toString() || '1' }
+            }).then(res => res.json())
+        );
 
-        setLoading(true);
-        setError('');
-        try {
-            const response = await fetch(`http://localhost:8080/api/tasks/group/${groupId}`, {
-                headers: {
-                    'User-Id': currentUser?.id?.toString() || '1'
-                }
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success) {
-                    setTasks(data.tasks || []);
-                }
-            } else {
-                setError('Failed to load tasks');
-            }
-        } catch (error) {
-            setError('Failed to load tasks');
-            console.error('Failed to fetch tasks:', error);
-        } finally {
-            setLoading(false);
+        if (result && result.success) {
+            setTasks(result.tasks || []);
         }
     };
 
-    const handleCreateTask = () => {
-        navigate(`/groups/${groupId}/tasks/create`);
+    const handleTaskStatusChange = async (taskId, newStatus) => {
+        try {
+            const response = await fetch(`http://localhost:8080/api/tasks/${taskId}/status/${newStatus}`, {
+                method: 'PUT',
+                headers: { 'User-Id': currentUser?.id?.toString() || '1' }
+            });
+
+            if (response.ok) {
+                fetchTasks();
+                setSuccess(`Task status updated to ${newStatus.replace('_', ' ').toLowerCase()}!`);
+            } else {
+                throw new Error('Failed to update task status');
+            }
+        } catch (error) {
+            // Handle error through parent component or show notification
+        }
+        setTaskMenuAnchor(null);
+        setTaskToManage(null);
     };
 
     const handleTaskClick = (task) => {
@@ -120,7 +105,6 @@ const TaskBoard = ({ groupId, currentUser }) => {
     };
 
     const handleTaskMenuClick = (event, task) => {
-        event.stopPropagation();
         setTaskMenuAnchor(event.currentTarget);
         setTaskToManage(task);
     };
@@ -130,120 +114,27 @@ const TaskBoard = ({ groupId, currentUser }) => {
         setTaskToManage(null);
     };
 
-    const handleTaskStatusChange = async (taskId, newStatus) => {
-        try {
-            const response = await fetch(`http://localhost:8080/api/tasks/${taskId}/status/${newStatus}`, {
-                method: 'PUT',
-                headers: {
-                    'User-Id': currentUser?.id?.toString() || '1'
-                }
-            });
-
-            if (response.ok) {
-                fetchTasks(); // Refresh tasks
-                setSuccess(`Task status updated to ${newStatus.replace('_', ' ').toLowerCase()}!`);
-                setTimeout(() => setSuccess(''), 3000);
-            } else {
-                setError('Failed to update task status');
-            }
-        } catch (error) {
-            setError('Failed to update task status');
-        }
-        handleTaskMenuClose();
+    const handleTaskUpdated = () => {
+        fetchTasks();
+        setTaskViewDialog(false);
     };
 
     const getTasksByStatus = (status) => {
         return tasks.filter(task => task.status === status);
     };
 
-    const formatTaskDeadline = (deadline) => {
-        const date = new Date(deadline);
-        const now = new Date();
-        const diffInHours = (date - now) / (1000 * 60 * 60);
-
-        if (diffInHours < 0) {
-            return { text: 'Overdue', color: 'error.main', isOverdue: true };
-        } else if (diffInHours < 24) {
-            return { text: `${Math.ceil(diffInHours)}h left`, color: 'warning.main', isOverdue: false };
-        } else {
-            const days = Math.ceil(diffInHours / 24);
-            return { text: `${days}d left`, color: 'text.secondary', isOverdue: false };
-        }
-    };
-
-    const handleTaskUpdated = () => {
-        fetchTasks(); // Refresh tasks when task is updated/deleted
-        setTaskViewDialog(false);
-    };
-
-    const renderTaskCard = (task) => {
-        const deadline = formatTaskDeadline(task.deadline);
-        return (
-            <TaskCard key={task.id} onClick={() => handleTaskClick(task)}>
-                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                        <Typography variant="h6" component="h3" sx={{ fontWeight: 600, flex: 1 }}>
-                            {task.title}
-                        </Typography>
-                        <IconButton
-                            size="small"
-                            onClick={(e) => handleTaskMenuClick(e, task)}
-                        >
-                            <MoreVertIcon fontSize="small" />
-                        </IconButton>
-                    </Box>
-
-                    {task.description && (
-                        <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            sx={{
-                                mb: 2,
-                                display: '-webkit-box',
-                                WebkitLineClamp: 2,
-                                WebkitBoxOrient: 'vertical',
-                                overflow: 'hidden'
-                            }}
-                        >
-                            {task.description}
-                        </Typography>
-                    )}
-
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Chip
-                            label={deadline.text}
-                            size="small"
-                            sx={{
-                                backgroundColor: deadline.isOverdue ? 'error.light' : 'grey.100',
-                                color: deadline.color
-                            }}
-                        />
-                        {task.assignedUsername && (
-                            <Tooltip title={`Assigned to ${task.assignedUsername}`}>
-                                <Avatar sx={{ width: 24, height: 24, fontSize: '0.7rem' }}>
-                                    {task.assignedUsername.charAt(0).toUpperCase()}
-                                </Avatar>
-                            </Tooltip>
-                        )}
-                    </Box>
-                </CardContent>
-            </TaskCard>
-        );
-    };
+    if (loading) {
+        return <LoadingState message="Loading tasks..." />;
+    }
 
     return (
         <StyledPaper>
-            {success && (
-                <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>
-                    {success}
-                </Alert>
-            )}
-
-            {error && (
-                <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
-                    {error}
-                </Alert>
-            )}
+            <StatusMessages
+                error={error}
+                success={success}
+                onClearError={clearMessages}
+                onClearSuccess={clearMessages}
+            />
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography variant="h5" component="h2" fontWeight={600}>
@@ -252,67 +143,26 @@ const TaskBoard = ({ groupId, currentUser }) => {
                 <Button
                     variant="contained"
                     startIcon={<AddIcon />}
-                    onClick={handleCreateTask}
+                    onClick={() => navigate(`/groups/${groupId}/tasks/create`)}
                 >
                     Create Task
                 </Button>
             </Box>
 
-            {loading ? (
-                <Box display="flex" justifyContent="center" py={4}>
-                    <CircularProgress />
-                </Box>
-            ) : (
-                <Grid container spacing={3}>
-                    {/* TODO Column */}
-                    <Grid item xs={12} md={4}>
-                        <KanbanColumn>
-                            <ColumnHeader sx={{ backgroundColor: 'info.light', color: 'info.contrastText' }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <TodoIcon />
-                                    <Typography variant="h6" fontWeight={600}>
-                                        To Do
-                                    </Typography>
-                                </Box>
-                                <Badge badgeContent={getTasksByStatus('TODO').length} color="primary" />
-                            </ColumnHeader>
-                            {getTasksByStatus('TODO').map(renderTaskCard)}
-                        </KanbanColumn>
+            <Grid container spacing={3}>
+                {Object.entries(columnConfig).map(([status, config]) => (
+                    <Grid item xs={12} md={4} key={status}>
+                        <TaskTableColumn
+                            title={config.title}
+                            icon={config.icon}
+                            tasks={getTasksByStatus(status)}
+                            headerColor={config.headerColor}
+                            onTaskClick={handleTaskClick}
+                            onTaskMenuClick={handleTaskMenuClick}
+                        />
                     </Grid>
-
-                    {/* IN PROGRESS Column */}
-                    <Grid item xs={12} md={4}>
-                        <KanbanColumn>
-                            <ColumnHeader sx={{ backgroundColor: 'warning.light', color: 'warning.contrastText' }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <InProgressIcon />
-                                    <Typography variant="h6" fontWeight={600}>
-                                        In Progress
-                                    </Typography>
-                                </Box>
-                                <Badge badgeContent={getTasksByStatus('IN_PROGRESS').length} color="primary" />
-                            </ColumnHeader>
-                            {getTasksByStatus('IN_PROGRESS').map(renderTaskCard)}
-                        </KanbanColumn>
-                    </Grid>
-
-                    {/* DONE Column */}
-                    <Grid item xs={12} md={4}>
-                        <KanbanColumn>
-                            <ColumnHeader sx={{ backgroundColor: 'success.light', color: 'success.contrastText' }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <DoneIcon />
-                                    <Typography variant="h6" fontWeight={600}>
-                                        Done
-                                    </Typography>
-                                </Box>
-                                <Badge badgeContent={getTasksByStatus('DONE').length} color="primary" />
-                            </ColumnHeader>
-                            {getTasksByStatus('DONE').map(renderTaskCard)}
-                        </KanbanColumn>
-                    </Grid>
-                </Grid>
-            )}
+                ))}
+            </Grid>
 
             {/* Task View Dialog */}
             <Dialog open={taskViewDialog} onClose={() => setTaskViewDialog(false)} maxWidth="lg" fullWidth>

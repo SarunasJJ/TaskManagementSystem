@@ -1,41 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Container, Box, IconButton, Tooltip, Typography } from '@mui/material';
-import { ArrowBack } from '@mui/icons-material';
-import authService from '../services/authService';
+import { Container, Box } from '@mui/material';
 import groupService from '../services/groupService';
+import { useAuth } from '../hooks/useAuth';
+import { useApiRequest } from '../hooks/useApiRequest';
 import Navbar from './Navbar';
+import LoadingState from './common/LoadingState';
+import ErrorState from './common/ErrorState';
+import PageHeader from './common/PageHeader';
 import CreateTask from './CreateTask';
 
 const CreateTaskPage = () => {
     const { groupId } = useParams();
     const navigate = useNavigate();
-    const [user, setUser] = useState(null);
+    const { user, loading: authLoading } = useAuth();
+    const { loading, error, makeRequest } = useApiRequest();
+
     const [group, setGroup] = useState(null);
-    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const currentUser = authService.getCurrentUser();
-        if (!currentUser) {
-            navigate('/login');
-            return;
+        if (user && groupId) {
+            fetchGroup();
         }
-        setUser(currentUser);
-        fetchGroup();
-    }, [groupId, navigate]);
+    }, [groupId, user]);
 
     const fetchGroup = async () => {
-        try {
-            const result = await groupService.getGroup(groupId);
-            if (result.success) {
-                setGroup(result.data);
-            } else {
-                navigate('/homepage'); // Redirect if group not found
-            }
-        } catch (error) {
-            navigate('/homepage');
-        } finally {
-            setLoading(false);
+        const result = await makeRequest(() => groupService.getGroup(groupId));
+        if (result.success) {
+            setGroup(result.data);
+        } else {
+            // Don't navigate immediately, let error state handle it
+            console.error('Failed to load group:', result.error);
         }
     };
 
@@ -52,17 +47,43 @@ const CreateTaskPage = () => {
         navigate(`/groups/${groupId}`);
     };
 
-    if (loading) {
+    const handleBackToHomepage = () => {
+        navigate('/homepage');
+    };
+
+    // Show loading while authenticating or fetching group
+    if (authLoading || loading) {
         return (
             <Box>
                 <Navbar user={user} />
-                <Container>
-                    <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
-                        <Typography variant="h6" color="text.secondary">
-                            Loading...
-                        </Typography>
-                    </Box>
+                <LoadingState message={authLoading ? "Authenticating..." : "Loading group details..."} />
+            </Box>
+        );
+    }
+
+    // Show error if group couldn't be loaded
+    if (error && !group) {
+        return (
+            <Box>
+                <Navbar user={user} />
+                <Container maxWidth="md">
+                    <ErrorState
+                        title="Unable to Load Group"
+                        message={error || "Group not found or you don't have access to create tasks in this group"}
+                        onAction={handleBackToHomepage}
+                        actionText="Back to Homepage"
+                    />
                 </Container>
+            </Box>
+        );
+    }
+
+    // Don't render CreateTask until we have group data
+    if (!group) {
+        return (
+            <Box>
+                <Navbar user={user} />
+                <LoadingState message="Loading group details..." />
             </Box>
         );
     }
@@ -71,21 +92,16 @@ const CreateTaskPage = () => {
         <Box>
             <Navbar user={user} />
             <Container maxWidth="md" sx={{ mt: 2 }}>
-                <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Tooltip title="Back to Group">
-                        <IconButton onClick={handleCancel} color="primary">
-                            <ArrowBack />
-                        </IconButton>
-                    </Tooltip>
-                    <Typography variant="h5" color="text.secondary">
-                        Create Task for "{group?.name}"
-                    </Typography>
-                </Box>
+                <PageHeader
+                    title={`Create Task for "${group.name}"`}
+                    onBack={handleCancel}
+                    backTooltip="Back to Group"
+                />
 
                 <CreateTask
                     currentUserId={user?.id}
                     groupId={parseInt(groupId)}
-                    groupMembers={group?.members || []}
+                    groupMembers={group.members || []}
                     onTaskCreated={handleTaskCreated}
                     onCancel={handleCancel}
                 />

@@ -7,14 +7,10 @@ import {
     Button,
     List,
     ListItem,
-    Avatar,
-    Alert,
-    Chip,
     CircularProgress,
-    Divider,
     InputAdornment,
     Tooltip,
-    Fade, IconButton
+    IconButton
 } from '@mui/material';
 import {
     Send as SendIcon,
@@ -23,7 +19,11 @@ import {
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import commentService from '../services/commentService';
-import authService from '../services/authService';
+import { useApiRequest } from '../hooks/useApiRequest';
+import UserAvatar from './common/UserAvatar';
+import LoadingState from './common/LoadingState';
+import StatusMessages from './common/StatusMessages';
+import EmptyState from './common/EmptyState';
 
 const DiscussionContainer = styled(Paper)(({ theme }) => ({
     height: '75vh',
@@ -64,40 +64,18 @@ const MessagesContainer = styled(Box)(({ theme }) => ({
     },
 }));
 
-const MessageItem = styled(ListItem)(({ theme, isOwn }) => ({
-    display: 'flex',
-    justifyContent: isOwn ? 'flex-end' : 'flex-start',
-    alignItems: 'flex-start',
-    padding: theme.spacing(1),
-    flexDirection: 'row',
-    flexWrap: 'nowrap',
-}));
-
 const MessageBubble = styled(Paper)(({ theme, isOwn }) => ({
     maxWidth: '70%',
     minWidth: 'fit-content',
     padding: theme.spacing(1.5, 2),
     borderRadius: theme.spacing(2),
-    position: 'relative',
     backgroundColor: isOwn ? theme.palette.primary.main : theme.palette.background.paper,
     color: isOwn ? theme.palette.primary.contrastText : theme.palette.text.primary,
     wordWrap: 'break-word',
     wordBreak: 'break-word',
     boxShadow: theme.shadows[2],
-    display: 'inline-block',
-    ...(isOwn && {
-        borderBottomRightRadius: theme.spacing(0.5),
-    }),
-    ...(!isOwn && {
-        borderBottomLeftRadius: theme.spacing(0.5),
-    }),
-}));
-
-const MessageActions = styled(Box)(({ theme }) => ({
-    opacity: 0,
-    transition: 'opacity 0.2s ease',
-    marginLeft: theme.spacing(1),
-    marginRight: theme.spacing(1),
+    ...(isOwn && { borderBottomRightRadius: theme.spacing(0.5) }),
+    ...(!isOwn && { borderBottomLeftRadius: theme.spacing(0.5) }),
 }));
 
 const InputContainer = styled(Box)(({ theme }) => ({
@@ -106,31 +84,23 @@ const InputContainer = styled(Box)(({ theme }) => ({
     backgroundColor: theme.palette.background.paper,
 }));
 
-const StatsContainer = styled(Box)(({ theme }) => ({
-    display: 'flex',
-    alignItems: 'center',
-    gap: theme.spacing(2),
-    fontSize: '0.875rem',
-    opacity: 0.9,
-}));
-
 const GroupDiscussions = ({ groupId, currentUser }) => {
+    const { loading, error, success, makeRequest, clearMessages } = useApiRequest();
     const [comments, setComments] = useState([]);
     const [newComment, setNewComment] = useState('');
-    const [loading, setLoading] = useState(true);
     const [posting, setPosting] = useState(false);
-    const [error, setError] = useState('');
     const [refreshing, setRefreshing] = useState(false);
 
     const messagesEndRef = useRef(null);
-    const user = currentUser || authService.getCurrentUser();
 
     useEffect(() => {
-        fetchComments();
-        // Auto-refresh every 30 seconds
-        const interval = setInterval(fetchComments, 30000);
-        return () => clearInterval(interval);
-    }, [groupId]);
+        if (groupId && currentUser) {
+            fetchComments();
+            // Auto-refresh every 30 seconds
+            const interval = setInterval(fetchComments, 30000);
+            return () => clearInterval(interval);
+        }
+    }, [groupId, currentUser]);
 
     useEffect(() => {
         scrollToBottom();
@@ -143,22 +113,14 @@ const GroupDiscussions = ({ groupId, currentUser }) => {
     const fetchComments = async (showRefreshIndicator = false) => {
         if (showRefreshIndicator) {
             setRefreshing(true);
-        } else {
-            setLoading(true);
         }
-        setError('');
 
-        try {
-            const result = await commentService.getComments(groupId);
-            if (result.success) {
-                setComments(result.data);
-            } else {
-                setError(result.error);
-            }
-        } catch (error) {
-            setError('Failed to load comments');
-        } finally {
-            setLoading(false);
+        const result = await makeRequest(() => commentService.getComments(groupId));
+        if (result.success) {
+            setComments(result.data || []);
+        }
+
+        if (showRefreshIndicator) {
             setRefreshing(false);
         }
     };
@@ -168,21 +130,20 @@ const GroupDiscussions = ({ groupId, currentUser }) => {
     };
 
     const handlePostComment = async () => {
-        if (!newComment.trim()) return;
+        if (!newComment.trim() || posting) return;
 
         setPosting(true);
-        setError('');
-
         try {
             const result = await commentService.createComment(groupId, newComment.trim());
             if (result.success) {
                 setNewComment('');
-                await fetchComments(); // Refresh comments
+                await fetchComments(); // Refresh comments after posting
             } else {
-                setError(result.error);
+                // Error will be handled by the StatusMessages component
+                console.error('Failed to post comment:', result.error);
             }
         } catch (error) {
-            setError('Failed to post comment');
+            console.error('Failed to post comment:', error);
         } finally {
             setPosting(false);
         }
@@ -195,24 +156,82 @@ const GroupDiscussions = ({ groupId, currentUser }) => {
         }
     };
 
-    const formatDate = (dateString) => {
-        const date = new Date(dateString);
-        return date.toLocaleString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
+    const renderMessage = (comment, index) => {
+        const isOwn = comment.authorId === currentUser?.id;
+        const showAvatar = index === 0 || comments[index - 1].authorId !== comment.authorId;
+
+        // Check if we need extra spacing (30+ minutes gap from same user)
+        const needsSpacing = index > 0 &&
+            comments[index - 1].authorId === comment.authorId &&
+            new Date(comment.createdAt).getTime() - new Date(comments[index - 1].createdAt).getTime() > 1800000;
+
+        return (
+            <ListItem
+                key={comment.id}
+                sx={{
+                    display: 'flex',
+                    justifyContent: isOwn ? 'flex-end' : 'flex-start',
+                    alignItems: 'flex-start',
+                    padding: 1,
+                    marginTop: needsSpacing ? 3 : 0
+                }}
+            >
+                {!isOwn && (
+                    <UserAvatar
+                        username={comment.authorUsername}
+                        size={36}
+                        fontSize="0.9rem"
+                        sx={{
+                            mr: 1,
+                            visibility: showAvatar ? 'visible' : 'hidden'
+                        }}
+                    />
+                )}
+
+                <Box sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: isOwn ? 'flex-end' : 'flex-start',
+                    maxWidth: '70%',
+                }}>
+                    {showAvatar && !isOwn && (
+                        <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ ml: 1, mb: 0.5, fontWeight: 600 }}
+                        >
+                            {comment.authorUsername}
+                        </Typography>
+                    )}
+
+                    <MessageBubble isOwn={isOwn}>
+                        <Typography
+                            variant="body1"
+                            sx={{
+                                whiteSpace: 'pre-wrap',
+                                lineHeight: 1.4,
+                                margin: 0
+                            }}
+                        >
+                            {comment.content}
+                        </Typography>
+                    </MessageBubble>
+                </Box>
+
+                {isOwn && (
+                    <UserAvatar
+                        username={comment.authorUsername}
+                        size={36}
+                        fontSize="0.9rem"
+                        sx={{
+                            ml: 1,
+                            visibility: showAvatar ? 'visible' : 'hidden'
+                        }}
+                    />
+                )}
+            </ListItem>
+        );
     };
-
-    const getAvatarColor = (username) => {
-        const colors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50'];
-        const index = username ? username.charCodeAt(0) % colors.length : 0;
-        return colors[index];
-    };
-
-
 
     if (loading) {
         return (
@@ -223,19 +242,7 @@ const GroupDiscussions = ({ groupId, currentUser }) => {
                         <Typography variant="h6">Group Discussions</Typography>
                     </Box>
                 </HeaderBox>
-                <Box
-                    display="flex"
-                    justifyContent="center"
-                    alignItems="center"
-                    flex={1}
-                >
-                    <Box textAlign="center">
-                        <CircularProgress sx={{ mb: 2 }} />
-                        <Typography variant="body1" color="text.secondary">
-                            Loading discussions...
-                        </Typography>
-                    </Box>
-                </Box>
+                <LoadingState message="Loading discussions..." />
             </DiscussionContainer>
         );
     }
@@ -258,119 +265,24 @@ const GroupDiscussions = ({ groupId, currentUser }) => {
                 </Tooltip>
             </HeaderBox>
 
-            {error && (
-                <Fade in>
-                    <Alert
-                        severity="error"
-                        sx={{ m: 2 }}
-                        onClose={() => setError('')}
-                    >
-                        {error}
-                    </Alert>
-                </Fade>
-            )}
+            <StatusMessages
+                error={error}
+                success={success}
+                onClearError={clearMessages}
+                onClearSuccess={clearMessages}
+            />
 
             <MessagesContainer>
                 {comments.length === 0 ? (
-                    <Box
-                        display="flex"
-                        flexDirection="column"
-                        alignItems="center"
-                        justifyContent="center"
-                        height="100%"
-                        textAlign="center"
-                        p={3}
-                    >
-                        <MessageIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
-                        <Typography variant="h6" color="text.secondary" gutterBottom>
-                            No messages yet
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                            Start the conversation by posting the first message!
-                        </Typography>
-                    </Box>
+                    <EmptyState
+                        icon={MessageIcon}
+                        title="No messages yet"
+                        description="Start the conversation by posting the first message!"
+                        variant="box"
+                    />
                 ) : (
                     <List sx={{ py: 0 }}>
-                        {comments.map((comment, index) => {
-                            const isOwn = comment.authorId === user?.id;
-                            const showAvatar = index === 0 || comments[index - 1].authorId !== comment.authorId;
-
-                            // Check if we need extra spacing (30+ minutes gap from same user)
-                            const needsSpacing = index > 0 &&
-                                comments[index - 1].authorId === comment.authorId &&
-                                new Date(comment.createdAt).getTime() - new Date(comments[index - 1].createdAt).getTime() > 1800000; // 30 minutes
-
-                            return (
-                                <MessageItem
-                                    key={comment.id}
-                                    isOwn={isOwn}
-                                    sx={{
-                                        marginTop: needsSpacing ? 3 : 0
-                                    }}
-                                >
-                                    {!isOwn && (
-                                        <Avatar
-                                            sx={{
-                                                bgcolor: getAvatarColor(comment.authorUsername),
-                                                width: 36,
-                                                height: 36,
-                                                fontSize: '0.9rem',
-                                                mr: 1,
-                                                visibility: showAvatar ? 'visible' : 'hidden'
-                                            }}
-                                        >
-                                            {comment.authorUsername?.charAt(0).toUpperCase()}
-                                        </Avatar>
-                                    )}
-
-                                    <Box sx={{
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: isOwn ? 'flex-end' : 'flex-start',
-                                        maxWidth: '70%',
-                                        width: 'auto'
-                                    }}>
-                                        {showAvatar && !isOwn && (
-                                            <Typography
-                                                variant="caption"
-                                                color="text.secondary"
-                                                sx={{ ml: 1, mb: 0.5, fontWeight: 600 }}
-                                            >
-                                                {comment.authorUsername}
-                                            </Typography>
-                                        )}
-
-                                        <MessageBubble isOwn={isOwn} elevation={isOwn ? 2 : 1}>
-                                            <Typography
-                                                variant="body1"
-                                                sx={{
-                                                    whiteSpace: 'pre-wrap',
-                                                    lineHeight: 1.4,
-                                                    margin: 0
-                                                }}
-                                            >
-                                                {comment.content}
-                                            </Typography>
-                                        </MessageBubble>
-                                    </Box>
-
-                                    {isOwn && (
-                                        <Avatar
-                                            sx={{
-                                                bgcolor: getAvatarColor(comment.authorUsername),
-                                                width: 36,
-                                                height: 36,
-                                                fontSize: '0.9rem',
-                                                ml: 1,
-                                                visibility: showAvatar ? 'visible' : 'hidden'
-                                            }}
-                                        >
-                                            {comment.authorUsername?.charAt(0).toUpperCase()}
-                                        </Avatar>
-                                    )}
-                                </MessageItem>
-                            );
-                        })}
+                        {comments.map(renderMessage)}
                         <div ref={messagesEndRef} />
                     </List>
                 )}
@@ -420,6 +332,7 @@ const GroupDiscussions = ({ groupId, currentUser }) => {
                         {posting ? 'Sending...' : 'Send'}
                     </Button>
                 </Box>
+
                 {newComment.length > 900 && (
                     <Typography
                         variant="caption"
