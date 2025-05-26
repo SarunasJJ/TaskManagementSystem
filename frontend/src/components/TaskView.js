@@ -4,7 +4,6 @@ import {
     CardContent,
     Typography,
     Box,
-    Grid,
     Paper,
     Chip,
     IconButton,
@@ -13,13 +12,13 @@ import {
 import {
     Schedule as ScheduleIcon,
     Create as CreateIcon,
-    Update as UpdateIcon,
-    Group as GroupIcon,
     Description as DescriptionIcon,
     Assignment as AssignmentIcon,
     Edit as EditIcon
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
+import taskService from '../services/taskService';
+import groupService from '../services/groupService';
 import { useApiRequest } from '../hooks/useApiRequest';
 import { formatDateTime, formatRelativeTime } from '../utils/dateUtils';
 import LoadingState from './common/LoadingState';
@@ -28,14 +27,39 @@ import StatusMessages from './common/StatusMessages';
 import ConfirmDialog from './common/ConfirmDialog';
 import UserAvatar from './common/UserAvatar';
 import TaskHeader from './task/TaskHeader';
-import TaskInfoCard from './task/TaskInfoCard';
 import TaskAssignmentDialog from './task/TaskAssignmentDialog';
 
 const StyledCard = styled(Card)(({ theme }) => ({
-    maxWidth: 900,
-    margin: '0 auto',
-    boxShadow: theme.shadows[12],
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
     borderRadius: theme.spacing(2),
+}));
+
+const InfoRow = styled(Box)(({ theme }) => ({
+    display: 'flex',
+    alignItems: 'center',
+    padding: theme.spacing(2, 0),
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    '&:last-child': {
+        borderBottom: 'none',
+    },
+}));
+
+const InfoLabel = styled(Typography)(({ theme }) => ({
+    minWidth: 120,
+    fontWeight: 600,
+    color: theme.palette.text.secondary,
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+}));
+
+const InfoContent = styled(Box)(({ theme }) => ({
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
 }));
 
 const TaskView = ({
@@ -70,30 +94,19 @@ const TaskView = ({
     }, [taskId, groupId]);
 
     const fetchTask = async () => {
-        const result = await makeRequest(
-            () => fetch(`http://localhost:8080/api/tasks/${taskId}`, {
-                headers: { 'User-Id': currentUserId.toString() }
-            }).then(res => res.json())
-        );
-
-        if (result) {
-            setTask(result);
-            setNewStatus(result.status);
-            setNewAssignedUserId(result.assignedUserId?.toString() || '');
+        const result = await makeRequest(() => taskService.getTask(taskId, currentUserId));
+        if (result.success) {
+            setTask(result.data);
+            setNewStatus(result.data.status);
+            setNewAssignedUserId(result.data.assignedUserId?.toString() || '');
         }
     };
 
     const fetchGroupMembers = async () => {
         try {
-            const response = await fetch(`http://localhost:8080/api/groups/${groupId}`, {
-                headers: { 'User-Id': currentUserId.toString() }
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success) {
-                    setGroupMembers(data.members || []);
-                }
+            const result = await groupService.getGroup(groupId);
+            if (result.success) {
+                setGroupMembers(result.data.members || []);
             }
         } catch (error) {
             console.error('Failed to fetch group members:', error);
@@ -102,18 +115,14 @@ const TaskView = ({
 
     const handleStatusUpdate = async () => {
         try {
-            const response = await fetch(`http://localhost:8080/api/tasks/${taskId}/status/${newStatus}`, {
-                method: 'PUT',
-                headers: { 'User-Id': currentUserId.toString() }
-            });
-
-            if (response.ok) {
+            const result = await taskService.updateTaskStatus(taskId, newStatus, currentUserId);
+            if (result.success) {
                 setTask(prev => ({ ...prev, status: newStatus }));
                 setSuccess('Task status updated successfully!');
                 setEditingStatus(false);
                 if (onTaskUpdated) onTaskUpdated();
             } else {
-                setError('Failed to update task status');
+                setError(result.error);
             }
         } catch (error) {
             setError('Failed to update task status');
@@ -122,26 +131,15 @@ const TaskView = ({
 
     const handleAssignmentUpdate = async () => {
         try {
-            let response;
-            if (newAssignedUserId) {
-                response = await fetch(`http://localhost:8080/api/tasks/${taskId}/assign/${newAssignedUserId}`, {
-                    method: 'PUT',
-                    headers: { 'User-Id': currentUserId.toString() }
-                });
-            } else {
-                response = await fetch(`http://localhost:8080/api/tasks/${taskId}/assign`, {
-                    method: 'PUT',
-                    headers: { 'User-Id': currentUserId.toString() }
-                });
-            }
-
-            if (response.ok) {
-                fetchTask();
+            const result = await taskService.assignTask(taskId, newAssignedUserId || null, currentUserId);
+            if (result.success) {
+                // Refresh task to get updated assignment info
+                await fetchTask();
                 setSuccess('Task assignment updated successfully!');
                 setEditingAssignment(false);
                 if (onTaskUpdated) onTaskUpdated();
             } else {
-                setError('Failed to update task assignment');
+                setError(result.error);
             }
         } catch (error) {
             setError('Failed to update task assignment');
@@ -151,19 +149,15 @@ const TaskView = ({
     const handleDelete = async () => {
         setDeleting(true);
         try {
-            const response = await fetch(`http://localhost:8080/api/tasks/${taskId}`, {
-                method: 'DELETE',
-                headers: { 'User-Id': currentUserId.toString() }
-            });
-
-            if (response.ok) {
+            const result = await taskService.deleteTask(taskId, currentUserId);
+            if (result.success) {
                 setSuccess('Task deleted successfully!');
                 setTimeout(() => {
                     if (onTaskUpdated) onTaskUpdated();
                     if (onClose) onClose();
                 }, 1000);
             } else {
-                setError('Failed to delete task');
+                setError(result.error);
             }
         } catch (error) {
             setError('Failed to delete task');
@@ -171,10 +165,6 @@ const TaskView = ({
             setDeleting(false);
             setDeleteDialog(false);
         }
-    };
-
-    const getAssignedMember = () => {
-        return groupMembers.find(member => member.id.toString() === newAssignedUserId);
     };
 
     if (loading) {
@@ -225,12 +215,12 @@ const TaskView = ({
                 onStatusCancel={() => setEditingStatus(false)}
             />
 
-            <CardContent sx={{ p: 4 }}>
+            <CardContent sx={{ p: 3, flex: 1, overflow: 'auto' }}>
                 {task.description && (
                     <Paper
                         sx={{
                             p: 3,
-                            mb: 4,
+                            mb: 3,
                             bgcolor: 'grey.50',
                             borderLeft: 4,
                             borderLeftColor: 'primary.main'
@@ -248,91 +238,87 @@ const TaskView = ({
                     </Paper>
                 )}
 
-                <Grid container spacing={3} sx={{ mb: 4 }}>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <TaskInfoCard
-                            icon={ScheduleIcon}
-                            title="Deadline"
-                            iconColor={deadline.isOverdue ? 'error.main' : 'warning.main'}
-                        >
-                            <Typography
-                                variant="body1"
-                                fontWeight="bold"
-                                color={deadline.isOverdue ? 'error.main' : 'text.primary'}
-                                sx={{ mb: 1 }}
-                            >
-                                {formatDateTime(task.deadline)}
-                            </Typography>
-                            <Chip
-                                label={deadline.text}
-                                size="small"
-                                color={deadline.isOverdue ? 'error' : 'default'}
-                                variant={deadline.isOverdue ? 'filled' : 'outlined'}
-                            />
-                        </TaskInfoCard>
-                    </Grid>
-
-                    <Grid item xs={12} sm={6} md={3}>
-                        <TaskInfoCard icon={GroupIcon} title="Group" iconColor="info.main">
-                            <Typography variant="body1" fontWeight="bold">
-                                Group ID: {task.groupId}
-                            </Typography>
-                        </TaskInfoCard>
-                    </Grid>
-
-                    <Grid item xs={12} sm={6} md={3}>
-                        <TaskInfoCard icon={AssignmentIcon} title="Assignment" iconColor="success.main">
-                            <Box display="flex" alignItems="center" justifyContent="space-between">
-                                <Box>
-                                    {task.assignedUsername ? (
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                            <UserAvatar
-                                                username={task.assignedUsername}
-                                                size={32}
-                                            />
-                                            <Typography variant="body1" fontWeight="bold">
-                                                {task.assignedUsername}
-                                            </Typography>
-                                        </Box>
-                                    ) : (
-                                        <Typography variant="body1" color="text.secondary" fontStyle="italic">
-                                            Not assigned
-                                        </Typography>
-                                    )}
-                                </Box>
-                                <Tooltip title="Edit Assignment">
-                                    <IconButton
-                                        size="small"
-                                        onClick={() => setEditingAssignment(true)}
-                                    >
-                                        <EditIcon fontSize="small" />
-                                    </IconButton>
-                                </Tooltip>
-                            </Box>
-                        </TaskInfoCard>
-                    </Grid>
-
-                    <Grid item xs={12} sm={6} md={3}>
-                        <TaskInfoCard icon={CreateIcon} title="Created By" iconColor="secondary.main">
-                            <Typography variant="body1" fontWeight="bold" sx={{ mb: 1 }}>
-                                {task.createdByUsername}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                                {formatDateTime(task.createdAt)}
-                            </Typography>
-                        </TaskInfoCard>
-                    </Grid>
-
-                    {task.updatedAt && task.updatedAt !== task.createdAt && (
-                        <Grid item xs={12} sm={6} md={3}>
-                            <TaskInfoCard icon={UpdateIcon} title="Last Updated" iconColor="grey.600">
-                                <Typography variant="caption" color="text.secondary">
-                                    {formatDateTime(task.updatedAt)}
+                {/* Task Information Rows */}
+                <Box sx={{ mt: 3 }}>
+                    {/* Deadline Row */}
+                    <InfoRow>
+                        <InfoLabel>
+                            <ScheduleIcon />
+                            Deadline
+                        </InfoLabel>
+                        <InfoContent>
+                            <Box>
+                                <Typography
+                                    variant="body1"
+                                    fontWeight="bold"
+                                    color={deadline.isOverdue ? 'error.main' : 'text.primary'}
+                                >
+                                    {formatDateTime(task.deadline)}
                                 </Typography>
-                            </TaskInfoCard>
-                        </Grid>
-                    )}
-                </Grid>
+                                <Chip
+                                    label={deadline.text}
+                                    size="small"
+                                    color={deadline.isOverdue ? 'error' : 'default'}
+                                    variant={deadline.isOverdue ? 'filled' : 'outlined'}
+                                    sx={{ mt: 0.5 }}
+                                />
+                            </Box>
+                        </InfoContent>
+                    </InfoRow>
+
+                    {/* Assignee Row */}
+                    <InfoRow>
+                        <InfoLabel>
+                            <AssignmentIcon />
+                            Assigned to
+                        </InfoLabel>
+                        <InfoContent>
+                            <Box>
+                                {task.assignedUsername ? (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <UserAvatar
+                                            username={task.assignedUsername}
+                                            size={32}
+                                        />
+                                        <Typography variant="body1" fontWeight="bold">
+                                            {task.assignedUsername}
+                                        </Typography>
+                                    </Box>
+                                ) : (
+                                    <Typography variant="body1" color="text.secondary" fontStyle="italic">
+                                        Not assigned
+                                    </Typography>
+                                )}
+                            </Box>
+                            <Tooltip title="Edit Assignment">
+                                <IconButton
+                                    size="small"
+                                    onClick={() => setEditingAssignment(true)}
+                                >
+                                    <EditIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        </InfoContent>
+                    </InfoRow>
+
+                    {/* Created By Row */}
+                    <InfoRow>
+                        <InfoLabel>
+                            <CreateIcon />
+                            Created by
+                        </InfoLabel>
+                        <InfoContent>
+                            <Box>
+                                <Typography variant="body1" fontWeight="bold">
+                                    {task.createdByUsername}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    {formatDateTime(task.createdAt)}
+                                </Typography>
+                            </Box>
+                        </InfoContent>
+                    </InfoRow>
+                </Box>
             </CardContent>
 
             {/* Assignment Edit Dialog */}

@@ -20,6 +20,7 @@ import {
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
+import taskService from '../services/taskService';
 import { useApiRequest } from '../hooks/useApiRequest';
 import LoadingState from './common/LoadingState';
 import StatusMessages from './common/StatusMessages';
@@ -68,32 +69,23 @@ const TaskBoard = ({ groupId, currentUser }) => {
     }, [groupId, currentUser]);
 
     const fetchTasks = async () => {
-        const result = await makeRequest(
-            () => fetch(`http://localhost:8080/api/tasks/group/${groupId}`, {
-                headers: { 'User-Id': currentUser?.id?.toString() || '1' }
-            }).then(res => res.json())
-        );
-
-        if (result && result.success) {
-            setTasks(result.tasks || []);
+        const result = await makeRequest(() => taskService.getTasksByGroup(groupId, currentUser?.id));
+        if (result.success) {
+            setTasks(result.data);
         }
     };
 
     const handleTaskStatusChange = async (taskId, newStatus) => {
         try {
-            const response = await fetch(`http://localhost:8080/api/tasks/${taskId}/status/${newStatus}`, {
-                method: 'PUT',
-                headers: { 'User-Id': currentUser?.id?.toString() || '1' }
-            });
-
-            if (response.ok) {
+            const result = await taskService.updateTaskStatus(taskId, newStatus, currentUser?.id);
+            if (result.success) {
                 fetchTasks();
                 setSuccess(`Task status updated to ${newStatus.replace('_', ' ').toLowerCase()}!`);
             } else {
-                throw new Error('Failed to update task status');
+                console.error('Failed to update task status:', result.error);
             }
         } catch (error) {
-            // Handle error through parent component or show notification
+            console.error('Failed to update task status:', error);
         }
         setTaskMenuAnchor(null);
         setTaskToManage(null);

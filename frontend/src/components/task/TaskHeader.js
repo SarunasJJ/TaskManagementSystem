@@ -38,7 +38,7 @@ const TaskHeader = ({
         <Box sx={{
             padding: 3,
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            borderRadius: '16px 16px 0 0',
+            borderRadius: '0 0 0 0',
             color: 'white'
         }}>
             <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>

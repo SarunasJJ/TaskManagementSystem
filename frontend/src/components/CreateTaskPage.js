@@ -29,7 +29,6 @@ const CreateTaskPage = () => {
         if (result.success) {
             setGroup(result.data);
         } else {
-            // Don't navigate immediately, let error state handle it
             console.error('Failed to load group:', result.error);
         }
     };
@@ -52,7 +51,7 @@ const CreateTaskPage = () => {
     };
 
     // Show loading while authenticating or fetching group
-    if (authLoading || loading) {
+    if (authLoading || loading || !group) {
         return (
             <Box>
                 <Navbar user={user} />
@@ -74,16 +73,6 @@ const CreateTaskPage = () => {
                         actionText="Back to Homepage"
                     />
                 </Container>
-            </Box>
-        );
-    }
-
-    // Don't render CreateTask until we have group data
-    if (!group) {
-        return (
-            <Box>
-                <Navbar user={user} />
-                <LoadingState message="Loading group details..." />
             </Box>
         );
     }

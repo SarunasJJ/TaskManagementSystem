@@ -3,8 +3,7 @@ import {
     Paper,
     Box,
     Typography,
-    Avatar,
-    Chip
+    Avatar
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 

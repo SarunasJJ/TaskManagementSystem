@@ -5,8 +5,7 @@ import {
     Typography,
     Button,
     Box,
-    Divider,
-    InputAdornment
+    Divider
 } from '@mui/material';
 import {
     Add as AddIcon,
@@ -17,6 +16,7 @@ import {
     Cancel as CancelIcon
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
+import taskService from '../services/taskService';
 import { useApiRequest } from '../hooks/useApiRequest';
 import { useFormValidation } from '../hooks/useFormValidation';
 import { validationRules } from '../utils/validationRules';
@@ -85,13 +85,6 @@ const CreateTask = ({
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        // Additional validation for deadline
-        const deadlineDate = new Date(formData.deadline);
-        if (deadlineDate <= new Date()) {
-            // Handle deadline validation error
-            return;
-        }
-
         if (!validateForm(formData)) {
             return;
         }
@@ -105,18 +98,11 @@ const CreateTask = ({
         };
 
         const result = await makeRequest(
-            () => fetch('http://localhost:8080/api/tasks', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'User-Id': currentUserId.toString()
-                },
-                body: JSON.stringify(taskData)
-            }).then(res => res.json()),
-            'Task created successfully! 🎉'
+            () => taskService.createTask(taskData, currentUserId),
+            'Task created successfully!'
         );
 
-        if (result && result.success && onTaskCreated) {
+        if (result.success && onTaskCreated) {
             onTaskCreated(result);
         }
     };
@@ -154,6 +140,7 @@ const CreateTask = ({
                             required
                             maxLength={50}
                             startIcon={<TitleIcon color="action" />}
+                            error={errors.title}
                         />
 
                         <FormField
@@ -166,6 +153,7 @@ const CreateTask = ({
                             rows={4}
                             maxLength={1000}
                             startIcon={<DescriptionIcon color="action" />}
+                            error={errors.description}
                         />
 
                         <FormField
@@ -178,6 +166,7 @@ const CreateTask = ({
                             InputLabelProps={{ shrink: true }}
                             inputProps={{ min: minDateTime }}
                             startIcon={<ScheduleIcon color="action" />}
+                            error={errors.deadline}
                         />
 
                         <MemberSelect

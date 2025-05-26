@@ -41,7 +41,6 @@ const TaskTableColumn = ({
                         {title}
                     </Typography>
                 </Box>
-                <Badge badgeContent={tasks.length} color="primary" />
             </ColumnHeader>
             {tasks.map((task) => (
                 <TaskCard

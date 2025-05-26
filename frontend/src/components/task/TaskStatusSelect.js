@@ -30,7 +30,7 @@ const TaskStatusSelect = ({
         <FormControl size={size} variant={variant} {...props}>
             <InputLabel>{label}</InputLabel>
             <Select
-                variant="standard"
+                variant="outlined"
                 value={value}
                 onChange={onChange}
                 label={label}
