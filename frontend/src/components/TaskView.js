@@ -7,7 +7,7 @@ import {
     Paper,
     Chip,
     IconButton,
-    Tooltip
+    Tooltip, Button, DialogActions, Dialog, DialogTitle, DialogContent, Alert
 } from '@mui/material';
 import {
     Schedule as ScheduleIcon,
@@ -72,7 +72,11 @@ const TaskView = ({
     const { loading, error, success, makeRequest, setSuccess, setError, clearMessages } = useApiRequest();
 
     const [task, setTask] = useState(null);
+    const [taskVersion, setTaskVersion] = useState(null);
     const [groupMembers, setGroupMembers] = useState([]);
+    const [conflictDialog, setConflictDialog] = useState(false);
+    const [conflictData, setConflictData] = useState(null);
+    const [editingData, setEditingData] = useState(null);
 
     // Edit states
     const [editingStatus, setEditingStatus] = useState(false);
@@ -97,6 +101,7 @@ const TaskView = ({
         const result = await makeRequest(() => taskService.getTask(taskId, currentUserId));
         if (result.success) {
             setTask(result.data);
+            setTaskVersion(result.data.version);
             setNewStatus(result.data.status);
             setNewAssignedUserId(result.data.assignedUserId?.toString() || '');
         }
@@ -115,18 +120,78 @@ const TaskView = ({
 
     const handleStatusUpdate = async () => {
         try {
-            const result = await taskService.updateTaskStatus(taskId, newStatus, currentUserId);
+            const updateData = {
+                version: taskVersion,
+                status: newStatus
+            };
+
+            const result = await taskService.updateTask(taskId, updateData, currentUserId);
+
             if (result.success) {
                 setTask(prev => ({ ...prev, status: newStatus }));
+                setTaskVersion(prev => prev + 1); // ✅ Increment version optimistically
                 setSuccess('Task status updated successfully!');
                 setEditingStatus(false);
                 if (onTaskUpdated) onTaskUpdated();
             } else {
-                setError(result.error);
+                if (result.currentVersion && result.currentData) {
+                    handleOptimisticLockConflict(result, { status: newStatus });
+                } else {
+                    setError(result.error);
+                }
             }
         } catch (error) {
             setError('Failed to update task status');
         }
+    };
+
+    const handleOptimisticLockConflict = (conflictResult, userChanges) => {
+        setConflictData({
+            message: conflictResult.message,
+            currentVersion: conflictResult.currentVersion,
+            currentData: conflictResult.currentData,
+            userChanges: userChanges
+        });
+        setEditingData(userChanges);
+        setConflictDialog(true);
+    };
+
+    const handleForceUpdate = async () => {
+        try {
+            const updateData = {
+                version: conflictData.currentVersion,
+                ...editingData
+            };
+
+            const result = await taskService.updateTask(taskId, updateData, currentUserId);
+
+            if (result.success) {
+                await fetchTask(); // Refresh with latest data
+                setSuccess('Task updated successfully!');
+                setConflictDialog(false);
+                if (onTaskUpdated) onTaskUpdated();
+            } else {
+                setError('Failed to force update: ' + result.error);
+            }
+        } catch (error) {
+            setError('Failed to force update');
+        }
+    };
+
+    const handleRefreshAndRetry = () => {
+        fetchTask();
+        setTask(conflictData.currentData);
+        setTaskVersion(conflictData.currentVersion);
+        setConflictDialog(false);
+        setSuccess('Task refreshed with latest data. Please make your changes again.');
+    };
+
+    const handleMergeChanges = () => {
+        setTask(conflictData.currentData);
+        setTaskVersion(conflictData.currentVersion);
+        setConflictDialog(false);
+
+        setError(`Task was updated by another user. Current data loaded. Your changes: ${JSON.stringify(editingData)}`);
     };
 
     const handleAssignmentUpdate = async () => {
@@ -342,6 +407,77 @@ const TaskView = ({
                 confirmColor="error"
                 loading={deleting}
             />
+            <Dialog open={conflictDialog} onClose={() => setConflictDialog(false)} maxWidth="md" fullWidth>
+                <DialogTitle sx={{ color: 'warning.main' }}>
+                    Data Conflict Detected
+                </DialogTitle>
+                <DialogContent>
+                    <Typography variant="h6" gutterBottom>
+                        What would you like to do?
+                    </Typography>
+
+                    <Box sx={{ mt: 2 }}>
+                        <Typography variant="subtitle1" gutterBottom>
+                            <strong>Your Changes:</strong>
+                        </Typography>
+                        <Box sx={{ bgcolor: 'info.light', p: 2, borderRadius: 1, mb: 2 }}>
+                            <pre>{JSON.stringify(editingData, null, 2)}</pre>
+                        </Box>
+
+                        <Typography variant="subtitle1" gutterBottom>
+                            <strong>Current Data (from another user):</strong>
+                        </Typography>
+                        <Box sx={{ bgcolor: 'warning.light', p: 2, borderRadius: 1 }}>
+                            <Typography><strong>Title:</strong> {conflictData?.currentData?.title}</Typography>
+                            <Typography><strong>Status:</strong> {conflictData?.currentData?.status}</Typography>
+                            <Typography><strong>Description:</strong> {conflictData?.currentData?.description}</Typography>
+                            {/* Show other relevant fields */}
+                        </Box>
+                    </Box>
+                </DialogContent>
+                <DialogActions sx={{ flexDirection: 'column', gap: 1, p: 3 }}>
+                    <Box sx={{ display: 'flex', gap: 1, width: '100%' }}>
+                        <Button
+                            variant="outlined"
+                            onClick={handleRefreshAndRetry}
+                            sx={{ flex: 1 }}
+                        >
+                            Refresh & Retry
+                            <Typography variant="caption" display="block">
+                                Load latest data, lose my changes
+                            </Typography>
+                        </Button>
+
+                        <Button
+                            variant="outlined"
+                            color="warning"
+                            onClick={handleMergeChanges}
+                            sx={{ flex: 1 }}
+                        >
+                            Manual Merge
+                            <Typography variant="caption" display="block">
+                                Load latest data, keep editing
+                            </Typography>
+                        </Button>
+
+                        <Button
+                            variant="contained"
+                            color="error"
+                            onClick={handleForceUpdate}
+                            sx={{ flex: 1 }}
+                        >
+                            Force Overwrite
+                            <Typography variant="caption" display="block">
+                                Overwrite with my changes
+                            </Typography>
+                        </Button>
+                    </Box>
+
+                    <Button onClick={() => setConflictDialog(false)} sx={{ mt: 1 }}>
+                        Cancel
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </StyledCard>
     );
 };

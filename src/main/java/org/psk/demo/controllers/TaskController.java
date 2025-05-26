@@ -16,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -59,13 +60,21 @@ public class TaskController {
                     .body(new ErrorResponse(errors, false));
         }
 
-        AuthenticationResponse response = taskService.updateTask(taskId, request, userId);
+        Object response = taskService.updateTask(taskId, request, userId);
 
-        if (response.isSuccess()) {
-            return ResponseEntity.ok(response);
-        } else {
-            return ResponseEntity.badRequest().body(response);
+        if (response instanceof TaskService.OptimisticLockResponse) {
+            TaskService.OptimisticLockResponse lockResponse = (TaskService.OptimisticLockResponse) response;
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(lockResponse);
+        } else if (response instanceof AuthenticationResponse) {
+            AuthenticationResponse authResponse = (AuthenticationResponse) response;
+            if (authResponse.isSuccess()) {
+                return ResponseEntity.ok(authResponse);
+            } else {
+                return ResponseEntity.badRequest().body(authResponse);
+            }
         }
+
+        return ResponseEntity.badRequest().body(new ErrorResponse("Unexpected error", false));
     }
 
     @DeleteMapping("/{taskId}")
@@ -145,16 +154,32 @@ public class TaskController {
     @PutMapping("/{taskId}/status/{status}")
     public ResponseEntity<?> updateTaskStatus(@PathVariable Long taskId,
                                               @PathVariable TaskStatus status,
-                                              @RequestHeader("User-Id") Long userId) {
+                                              @RequestHeader("User-Id") Long userId,
+                                              @RequestBody(required = false) Map<String, Object> requestBody) {
+
+        Long version = null;
+        if (requestBody != null && requestBody.get("version") != null) {
+            version = Long.valueOf(requestBody.get("version").toString());
+        }
+
         UpdateTaskRequest request = new UpdateTaskRequest();
         request.setStatus(status);
+        request.setVersion(version);
 
-        AuthenticationResponse response = taskService.updateTask(taskId, request, userId);
+        Object response = taskService.updateTask(taskId, request, userId);
 
-        if (response.isSuccess()) {
-            return ResponseEntity.ok(response);
-        } else {
-            return ResponseEntity.badRequest().body(response);
+        if (response instanceof TaskService.OptimisticLockResponse) {
+            TaskService.OptimisticLockResponse lockResponse = (TaskService.OptimisticLockResponse) response;
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(lockResponse);
+        } else if (response instanceof AuthenticationResponse) {
+            AuthenticationResponse authResponse = (AuthenticationResponse) response;
+            if (authResponse.isSuccess()) {
+                return ResponseEntity.ok(authResponse);
+            } else {
+                return ResponseEntity.badRequest().body(authResponse);
+            }
         }
+
+        return ResponseEntity.badRequest().body(new ErrorResponse("Unexpected error", false));
     }
 }
