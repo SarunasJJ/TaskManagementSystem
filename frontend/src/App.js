@@ -1,21 +1,44 @@
 import './App.css';
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { Suspense, lazy } from 'react';
 import authService from "./services/authService";
-import {BrowserRouter, Navigate, Route, Routes} from "react-router-dom";
-import Login from "./components/Login";
-import SignUp from "./components/SignUp";
-import Homepage from "./components/Homepage";
-import CreateGroup from "./components/CreateGroup";
-import GroupView from "./components/GroupView";
-import CreateTaskPage from "./components/CreateTaskPage";
 import MuiThemeProvider from "./components/MuiThemeProvider";
+import LoadingState from "./components/common/LoadingState";
 
-const ProtectedRoute = ({children}) => {
-    return authService.isLoggedIn() ? children : <Navigate to="/login" />;
-}
+const Login = lazy(() => import("./components/auth/Login"));
+const SignUp = lazy(() => import("./components/auth/SignUp"));
+const Homepage = lazy(() => import("./components/Homepage"));
+const CreateGroup = lazy(() => import("./components/CreateGroup"));
+const GroupView = lazy(() => import("./components/GroupView"));
+const CreateTaskPage = lazy(() => import("./components/CreateTaskPage"));
 
-const PublicRoute = ({children}) => {
-    return !authService.isLoggedIn() ? children : <Navigate to="/homepage" />;
-}
+const ProtectedRoute = ({ children }) => {
+    const isAuthenticated = authService.isLoggedIn();
+
+    if (!isAuthenticated) {
+        return <Navigate to="/login" replace />;
+    }
+
+    return (
+        <Suspense fallback={<LoadingState message="Loading..." />}>
+            {children}
+        </Suspense>
+    );
+};
+
+const PublicRoute = ({ children }) => {
+    const isAuthenticated = authService.isLoggedIn();
+
+    if (isAuthenticated) {
+        return <Navigate to="/homepage" replace />;
+    }
+
+    return (
+        <Suspense fallback={<LoadingState message="Loading..." />}>
+            {children}
+        </Suspense>
+    );
+};
 
 function App() {
     return (
@@ -23,23 +46,67 @@ function App() {
             <BrowserRouter>
                 <div className="App">
                     <Routes>
-                        <Route path="/" element={<Navigate to="/homepage" />} />
+                        <Route path="/" element={<Navigate to="/homepage" replace />} />
 
-                        <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-                        <Route path="/signup" element={<PublicRoute><SignUp /></PublicRoute>} />
+                        {/* Public Routes */}
+                        <Route
+                            path="/login"
+                            element={
+                                <PublicRoute>
+                                    <Login />
+                                </PublicRoute>
+                            }
+                        />
+                        <Route
+                            path="/signup"
+                            element={
+                                <PublicRoute>
+                                    <SignUp />
+                                </PublicRoute>
+                            }
+                        />
 
-                        {/* Homepage now shows groups list directly */}
-                        <Route path="/homepage" element={<ProtectedRoute><Homepage/></ProtectedRoute>} />
+                        {/* Protected Routes */}
+                        <Route
+                            path="/homepage"
+                            element={
+                                <ProtectedRoute>
+                                    <Homepage />
+                                </ProtectedRoute>
+                            }
+                        />
 
                         {/* Group Routes */}
-                        <Route path="/groups" element={<Navigate to="/homepage" />} />
-                        <Route path="/groups/create" element={<ProtectedRoute><CreateGroup/></ProtectedRoute>} />
-                        <Route path="/groups/:groupId" element={<ProtectedRoute><GroupView/></ProtectedRoute>} />
+                        <Route path="/groups" element={<Navigate to="/homepage" replace />} />
+                        <Route
+                            path="/groups/create"
+                            element={
+                                <ProtectedRoute>
+                                    <CreateGroup />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/groups/:groupId"
+                            element={
+                                <ProtectedRoute>
+                                    <GroupView />
+                                </ProtectedRoute>
+                            }
+                        />
 
                         {/* Task Routes */}
-                        <Route path="/groups/:groupId/tasks/create" element={<ProtectedRoute><CreateTaskPage/></ProtectedRoute>} />
+                        <Route
+                            path="/groups/:groupId/tasks/create"
+                            element={
+                                <ProtectedRoute>
+                                    <CreateTaskPage />
+                                </ProtectedRoute>
+                            }
+                        />
 
-                        <Route path="*" element={<Navigate to="/homepage" />} />
+                        {/* Fallback */}
+                        <Route path="*" element={<Navigate to="/homepage" replace />} />
                     </Routes>
                 </div>
             </BrowserRouter>

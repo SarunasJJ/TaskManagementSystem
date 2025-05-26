@@ -47,6 +47,13 @@ const theme = createTheme({
         borderRadius: 8,
     },
     components: {
+        MuiAppBar: {
+            styleOverrides: {
+                root: {
+                    borderRadius: 0,
+                },
+            },
+        },
         MuiButton: {
             styleOverrides: {
                 root: {
