@@ -127,6 +127,21 @@ public class TaskController {
         }
     }
 
+    @PutMapping("/{taskId}/assign")
+    public ResponseEntity<?> unassignTask(@PathVariable Long taskId,
+                                          @RequestHeader("User-Id") Long userId) {
+        UpdateTaskRequest request = new UpdateTaskRequest();
+        request.setAssignedUserId(null);
+
+        AuthenticationResponse response = taskService.updateTask(taskId, request, userId);
+
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+
     @PutMapping("/{taskId}/status/{status}")
     public ResponseEntity<?> updateTaskStatus(@PathVariable Long taskId,
                                               @PathVariable TaskStatus status,

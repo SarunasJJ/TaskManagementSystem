@@ -9,7 +9,19 @@ import {
     Paper,
     CircularProgress,
     Button,
-    Avatar
+    Avatar,
+    FormControl,
+    InputLabel,
+    Select,
+    MenuItem,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Alert,
+    Divider,
+    IconButton,
+    Tooltip
 } from '@mui/material';
 import {
     ArrowBack as ArrowBackIcon,
@@ -23,12 +35,15 @@ import {
     CheckCircle as CheckCircleIcon,
     RadioButtonUnchecked as TodoIcon,
     Autorenew as InProgressIcon,
-    Cancel as CancelIcon
+    Delete as DeleteIcon,
+    Edit as EditIcon,
+    Person as PersonIcon,
+    Save as SaveIcon
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 
 const StyledCard = styled(Card)(({ theme }) => ({
-    maxWidth: 800,
+    maxWidth: 900,
     margin: '0 auto',
     boxShadow: theme.shadows[12],
     borderRadius: theme.spacing(2),
@@ -53,16 +68,50 @@ const InfoPaper = styled(Paper)(({ theme }) => ({
     },
 }));
 
-const TaskView = ({ taskId, currentUserId = 1, onClose }) => {
+const ActionBox = styled(Box)(({ theme }) => ({
+    display: 'flex',
+    gap: theme.spacing(2),
+    justifyContent: 'flex-end',
+    marginTop: theme.spacing(3),
+    [theme.breakpoints.down('sm')]: {
+        flexDirection: 'column',
+        '& > *': {
+            width: '100%',
+        },
+    },
+}));
+
+const TaskView = ({
+                      taskId,
+                      currentUserId,
+                      groupId,
+                      onClose,
+                      onTaskUpdated
+                  }) => {
     const [task, setTask] = useState(null);
+    const [groupMembers, setGroupMembers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+
+    // Edit states
+    const [editingStatus, setEditingStatus] = useState(false);
+    const [editingAssignment, setEditingAssignment] = useState(false);
+    const [newStatus, setNewStatus] = useState('');
+    const [newAssignedUserId, setNewAssignedUserId] = useState('');
+
+    // Delete dialog
+    const [deleteDialog, setDeleteDialog] = useState(false);
+    const [deleting, setDeleting] = useState(false);
 
     useEffect(() => {
         if (taskId) {
             fetchTask();
+            if (groupId) {
+                fetchGroupMembers();
+            }
         }
-    }, [taskId]);
+    }, [taskId, groupId]);
 
     const fetchTask = async () => {
         try {
@@ -78,6 +127,8 @@ const TaskView = ({ taskId, currentUserId = 1, onClose }) => {
             if (response.ok) {
                 const taskData = await response.json();
                 setTask(taskData);
+                setNewStatus(taskData.status);
+                setNewAssignedUserId(taskData.assignedUserId?.toString() || '');
             } else if (response.status === 404) {
                 setError('Task not found');
             } else {
@@ -88,6 +139,110 @@ const TaskView = ({ taskId, currentUserId = 1, onClose }) => {
             console.error('Error fetching task:', err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchGroupMembers = async () => {
+        try {
+            const response = await fetch(`http://localhost:8080/api/groups/${groupId}`, {
+                headers: {
+                    'User-Id': currentUserId.toString()
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success) {
+                    setGroupMembers(data.members || []);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to fetch group members:', error);
+        }
+    };
+
+    const handleStatusUpdate = async () => {
+        try {
+            const response = await fetch(`http://localhost:8080/api/tasks/${taskId}/status/${newStatus}`, {
+                method: 'PUT',
+                headers: {
+                    'User-Id': currentUserId.toString()
+                }
+            });
+
+            if (response.ok) {
+                setTask(prev => ({ ...prev, status: newStatus }));
+                setSuccess('Task status updated successfully!');
+                setEditingStatus(false);
+                if (onTaskUpdated) onTaskUpdated();
+            } else {
+                setError('Failed to update task status');
+            }
+        } catch (error) {
+            setError('Failed to update task status');
+        }
+    };
+
+    const handleAssignmentUpdate = async () => {
+        try {
+            let response;
+
+            if (newAssignedUserId) {
+                // Assign to a user
+                response = await fetch(`http://localhost:8080/api/tasks/${taskId}/assign/${newAssignedUserId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'User-Id': currentUserId.toString()
+                    }
+                });
+            } else {
+                // Unassign the task
+                response = await fetch(`http://localhost:8080/api/tasks/${taskId}/assign`, {
+                    method: 'PUT',
+                    headers: {
+                        'User-Id': currentUserId.toString()
+                    }
+                });
+            }
+
+            if (response.ok) {
+                // Refresh task to get updated assignment info
+                fetchTask();
+                setSuccess('Task assignment updated successfully!');
+                setEditingAssignment(false);
+                if (onTaskUpdated) onTaskUpdated();
+            } else {
+                setError('Failed to update task assignment');
+            }
+        } catch (error) {
+            setError('Failed to update task assignment');
+        }
+    };
+
+    const handleDelete = async () => {
+        try {
+            setDeleting(true);
+            const response = await fetch(`http://localhost:8080/api/tasks/${taskId}`, {
+                method: 'DELETE',
+                headers: {
+                    'User-Id': currentUserId.toString()
+                }
+            });
+
+            if (response.ok) {
+                setSuccess('Task deleted successfully!');
+                setTimeout(() => {
+                    if (onTaskUpdated) onTaskUpdated();
+                    if (onClose) onClose();
+                }, 1000);
+            } else {
+                setError('Failed to delete task');
+            }
+        } catch (error) {
+            setError('Failed to delete task');
+        } finally {
+            setDeleting(false);
+            setDeleteDialog(false);
         }
     };
 
@@ -139,6 +294,16 @@ const TaskView = ({ taskId, currentUserId = 1, onClose }) => {
         return configs[status] || configs['TODO'];
     };
 
+    const getAvatarColor = (username) => {
+        const colors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50'];
+        const index = username.charCodeAt(0) % colors.length;
+        return colors[index];
+    };
+
+    const getAssignedMember = () => {
+        return groupMembers.find(member => member.id.toString() === newAssignedUserId);
+    };
+
     if (loading) {
         return (
             <StyledCard>
@@ -183,6 +348,7 @@ const TaskView = ({ taskId, currentUserId = 1, onClose }) => {
                             variant="outlined"
                             startIcon={<ArrowBackIcon />}
                             onClick={onClose}
+                            sx={{ mt: 2 }}
                         >
                             Go Back
                         </Button>
@@ -197,6 +363,18 @@ const TaskView = ({ taskId, currentUserId = 1, onClose }) => {
 
     return (
         <StyledCard>
+            {success && (
+                <Alert severity="success" sx={{ m: 2 }} onClose={() => setSuccess('')}>
+                    {success}
+                </Alert>
+            )}
+
+            {error && (
+                <Alert severity="error" sx={{ m: 2 }} onClose={() => setError('')}>
+                    {error}
+                </Alert>
+            )}
+
             <HeaderBox>
                 <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
                     {onClose && (
@@ -211,7 +389,19 @@ const TaskView = ({ taskId, currentUserId = 1, onClose }) => {
                             Back
                         </Button>
                     )}
-                    <Box />
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Tooltip title="Delete Task">
+                            <IconButton
+                                color="inherit"
+                                onClick={() => setDeleteDialog(true)}
+                                sx={{
+                                    '&:hover': { bgcolor: 'rgba(244, 67, 54, 0.2)' }
+                                }}
+                            >
+                                <DeleteIcon />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
                 </Box>
 
                 <Box display="flex" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={2}>
@@ -220,18 +410,58 @@ const TaskView = ({ taskId, currentUserId = 1, onClose }) => {
                             {task.title}
                         </Typography>
                     </Box>
-                    <Chip
-                        icon={statusConfig.icon}
-                        label={statusConfig.label}
-                        color={statusConfig.color}
-                        size="large"
-                        sx={{
-                            fontSize: '1rem',
-                            fontWeight: 'bold',
-                            px: 2,
-                            py: 1,
-                        }}
-                    />
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        {editingStatus ? (
+                            <FormControl size="small" sx={{ minWidth: 150 }}>
+                                <Select
+                                    value={newStatus}
+                                    onChange={(e) => setNewStatus(e.target.value)}
+                                    sx={{
+                                        bgcolor: 'rgba(255,255,255,0.1)',
+                                        color: 'inherit',
+                                        '& .MuiSelect-icon': { color: 'inherit' }
+                                    }}
+                                >
+                                    <MenuItem value="TODO">To Do</MenuItem>
+                                    <MenuItem value="IN_PROGRESS">In Progress</MenuItem>
+                                    <MenuItem value="DONE">Done</MenuItem>
+                                </Select>
+                                <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                                    <Button
+                                        size="small"
+                                        variant="contained"
+                                        onClick={handleStatusUpdate}
+                                        sx={{ bgcolor: 'rgba(255,255,255,0.2)' }}
+                                    >
+                                        Save
+                                    </Button>
+                                    <Button
+                                        size="small"
+                                        onClick={() => setEditingStatus(false)}
+                                        sx={{ color: 'inherit' }}
+                                    >
+                                        Cancel
+                                    </Button>
+                                </Box>
+                            </FormControl>
+                        ) : (
+                            <Chip
+                                icon={statusConfig.icon}
+                                label={statusConfig.label}
+                                color={statusConfig.color}
+                                size="large"
+                                onClick={() => setEditingStatus(true)}
+                                sx={{
+                                    fontSize: '1rem',
+                                    fontWeight: 'bold',
+                                    px: 2,
+                                    py: 1,
+                                    cursor: 'pointer',
+                                    '&:hover': { transform: 'scale(1.05)' }
+                                }}
+                            />
+                        )}
+                    </Box>
                 </Box>
             </HeaderBox>
 
@@ -299,9 +529,6 @@ const TaskView = ({ taskId, currentUserId = 1, onClose }) => {
                             <Typography variant="body1" fontWeight="bold" sx={{ mb: 1 }}>
                                 Group ID: {task.groupId}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary" fontStyle="italic">
-                                Group details will be available when groups are implemented
-                            </Typography>
                         </InfoPaper>
                     </Grid>
 
@@ -314,11 +541,31 @@ const TaskView = ({ taskId, currentUserId = 1, onClose }) => {
                                 <Typography variant="h6" fontWeight="bold">
                                     Assignment
                                 </Typography>
+                                <Tooltip title="Edit Assignment">
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => setEditingAssignment(true)}
+                                        sx={{ ml: 'auto' }}
+                                    >
+                                        <EditIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
                             </Box>
                             {task.assignedUsername ? (
-                                <Typography variant="body1">
-                                    Assigned to <strong>{task.assignedUsername}</strong>
-                                </Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Avatar
+                                        sx={{
+                                            bgcolor: getAvatarColor(task.assignedUsername),
+                                            width: 32,
+                                            height: 32
+                                        }}
+                                    >
+                                        {task.assignedUsername.charAt(0).toUpperCase()}
+                                    </Avatar>
+                                    <Typography variant="body1" fontWeight="bold">
+                                        {task.assignedUsername}
+                                    </Typography>
+                                </Box>
                             ) : (
                                 <Typography variant="body1" color="text.secondary" fontStyle="italic">
                                     Not assigned
@@ -377,6 +624,98 @@ const TaskView = ({ taskId, currentUserId = 1, onClose }) => {
                     )}
                 </Grid>
             </CardContent>
+
+            {/* Assignment Edit Dialog */}
+            <Dialog open={editingAssignment} onClose={() => setEditingAssignment(false)} maxWidth="sm" fullWidth>
+                <DialogTitle>Edit Task Assignment</DialogTitle>
+                <DialogContent>
+                    <FormControl fullWidth sx={{ mt: 2 }}>
+                        <InputLabel>Assign to Member</InputLabel>
+                        <Select
+                            value={newAssignedUserId}
+                            onChange={(e) => setNewAssignedUserId(e.target.value)}
+                            label="Assign to Member"
+                            renderValue={(selected) => {
+                                if (!selected) return 'Not assigned';
+                                const member = getAssignedMember();
+                                return member ? (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <Avatar
+                                            sx={{
+                                                bgcolor: getAvatarColor(member.username),
+                                                width: 24,
+                                                height: 24,
+                                                fontSize: '0.8rem'
+                                            }}
+                                        >
+                                            {member.username.charAt(0).toUpperCase()}
+                                        </Avatar>
+                                        {member.username}
+                                    </Box>
+                                ) : 'Not assigned';
+                            }}
+                        >
+                            <MenuItem value="">
+                                <em>No assignment</em>
+                            </MenuItem>
+                            {groupMembers.map((member) => (
+                                <MenuItem key={member.id} value={member.id.toString()}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                        <Avatar
+                                            sx={{
+                                                bgcolor: getAvatarColor(member.username),
+                                                width: 32,
+                                                height: 32,
+                                                fontSize: '0.9rem'
+                                            }}
+                                        >
+                                            {member.username.charAt(0).toUpperCase()}
+                                        </Avatar>
+                                        <Typography>{member.username}</Typography>
+                                    </Box>
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setEditingAssignment(false)}>
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleAssignmentUpdate}
+                        variant="contained"
+                        startIcon={<SaveIcon />}
+                    >
+                        Save Assignment
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={deleteDialog} onClose={() => setDeleteDialog(false)}>
+                <DialogTitle sx={{ color: 'error.main' }}>Delete Task</DialogTitle>
+                <DialogContent>
+                    <Typography>
+                        Are you sure you want to delete the task "<strong>{task?.title}</strong>"?
+                        This action cannot be undone.
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDeleteDialog(false)}>
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleDelete}
+                        color="error"
+                        variant="contained"
+                        disabled={deleting}
+                        startIcon={deleting ? <CircularProgress size={20} /> : <DeleteIcon />}
+                    >
+                        {deleting ? 'Deleting...' : 'Delete Task'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </StyledCard>
     );
 };

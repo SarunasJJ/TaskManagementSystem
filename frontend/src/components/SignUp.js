@@ -103,29 +103,6 @@ const SignUp = () => {
         }
     };
 
-    const getPasswordStrength = () => {
-        const password = formData.password;
-        if (!password) return { strength: 0, text: '', color: 'error' };
-
-        let strength = 0;
-        const checks = {
-            length: password.length >= 8,
-            lowercase: /[a-z]/.test(password),
-            uppercase: /[A-Z]/.test(password),
-            number: /\d/.test(password),
-            special: /[!@#$%^&*(),.?":{}|<>]/.test(password)
-        };
-
-        strength = Object.values(checks).filter(Boolean).length;
-
-        if (strength <= 2) return { strength: (strength / 5) * 100, text: 'Weak', color: 'error' };
-        if (strength <= 3) return { strength: (strength / 5) * 100, text: 'Fair', color: 'warning' };
-        if (strength <= 4) return { strength: (strength / 5) * 100, text: 'Good', color: 'info' };
-        return { strength: 100, text: 'Strong', color: 'success' };
-    };
-
-    const passwordStrength = getPasswordStrength();
-
     const validateForm = () => {
         const newErrors = {};
 
@@ -289,28 +266,6 @@ const SignUp = () => {
                                     ),
                                 }}
                             />
-                            {formData.password && (
-                                <PasswordStrengthBox>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Password strength:
-                                        </Typography>
-                                        <Typography
-                                            variant="caption"
-                                            color={`${passwordStrength.color}.main`}
-                                            fontWeight={600}
-                                        >
-                                            {passwordStrength.text}
-                                        </Typography>
-                                    </Box>
-                                    <LinearProgress
-                                        variant="determinate"
-                                        value={passwordStrength.strength}
-                                        color={passwordStrength.color}
-                                        sx={{ height: 4, borderRadius: 2 }}
-                                    />
-                                </PasswordStrengthBox>
-                            )}
                         </Box>
 
                         <TextField
