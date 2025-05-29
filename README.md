@@ -1,6 +1,6 @@
 # University Group Task Management System
 
-A comprehensive task management platform designed for **university students** working in collaborative groups. Built with **Spring Boot (Java 21)** backend, **React 19** frontend, and **PostgreSQL** database, featuring real-time discussions, audit logging, and performance monitoring.
+A comprehensive task management platform designed for **university students** working in collaborative groups. Built with **Spring Boot (Java 21)** backend, **React 19** frontend, and **PostgreSQL** database, featuring real-time discussions.
 
 ## Tech Stack
 
@@ -56,9 +56,4 @@ POSTGRES_PORT=5432
 # Application Ports
 BACKEND_PORT=8080
 FRONTEND_PORT=3000
-
-# Audit System (Configurable without code changes)
-APP_AUDIT_ENABLED=true
-APP_AUDIT_LOG_TO_DB=true
-APP_AUDIT_LOG_TO_FILE=true
 ```
